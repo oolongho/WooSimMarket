@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.21'
+}
+
+group = 'com.oolonghoo'
+version = '0.1.0'
+
+java {
+    // Paper 26.1+ 强制 JVM 25+，插件字节码目标同步改为 Java 25
+    // （覆盖风格指南的 Java 21，因 Paper 26.1+ dev bundle 已不支持更低版本运行时）
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    mavenCentral()
+    maven { url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
+    // VaultAPI（经济接口，软依赖）
+    maven { url = 'https://jitpack.io' }
+    // CraftEngine 仓库（https://repo.momirealms.net/releases/）与 Gradle Apache HttpClient 5 的 TLS 握手不兼容
+    // （JDK 原生 SSLSocket 与 PowerShell .NET 均可正常握手，仅 Gradle HTTP client 失败），
+    // 故 CE 编译期 jar 改为本地 libs/ 引入。升级 Gradle 或 CE 仓库修复后可切回 maven 坐标。
+}
+
+dependencies {
+    paperweight.paperDevBundle('26.1.2.build.74-stable')
+    // CraftEngine（自定义方块 API，运行期硬依赖）—— 本地 libs，规避 Gradle HTTP client TLS 问题
+    compileOnly fileTree(dir: 'libs', include: ['craft-engine-*.jar'])
+    // VaultAPI 传递 org.bukkit:bukkit 与 paper-api 的 bukkit capability 冲突，需排除
+    compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
+        exclude group: 'org.bukkit', module: 'bukkit'
+    }
+    compileOnly 'me.clip:placeholderapi:2.11.6'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+def projectVersion = version
+def projectJavaVersion = java.sourceCompatibility
+
+processResources {
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand 'project': [version: projectVersion]
+    }
+}
+
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveBaseName = 'WooSimMarket'
+
+    manifest {
+        attributes(
+            'Built-By': 'Gradle',
+            'Build-Jdk': System.getProperty('java.version'),
+            'Created-By': 'WooSimMarket Build System'
+        )
+    }
+}
+
+tasks.register('buildInfo') {
+    doLast {
+        println "=========================================="
+        println "WooSimMarket Build Information"
+        println "=========================================="
+        println "Version: ${projectVersion}"
+        println "Java: ${projectJavaVersion}"
+        println "Paper: 26.1+ (api-version 1.21 compatible)"
+        println "=========================================="
+    }
+}
+
+build.dependsOn buildInfo

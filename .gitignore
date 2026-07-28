@@ -1,0 +1,7 @@
+.oolongho/
+build/
+.gradle/
+*.iml
+.idea/
+gradle-app.setting
+!gradle-wrapper.jar

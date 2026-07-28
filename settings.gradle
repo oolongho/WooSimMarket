@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        maven { url = 'https://maven.aliyun.com/repository/public' }
+        maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+        mavenCentral()
+        // VaultAPI（经济接口，软依赖）
+        maven { url = 'https://jitpack.io' }
+        // PlaceholderAPI（已在 build.gradle 也声明，这里统一兜底）
+        maven { url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
+        // CraftEngine 仓库（repo.momirealms.net）与 Gradle HTTP client TLS 不兼容，CE jar 改用本地 libs/
+    }
+}
+
+rootProject.name = 'WooSimMarket'
