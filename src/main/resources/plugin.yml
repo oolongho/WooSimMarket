@@ -1,6 +1,6 @@
 name: WooSimMarket
 version: '${project.version}'
-main: com.oolonghoo.woosimmarket.WooSimMarket
+main: com.oolongho.woosimmarket.WooSimMarket
 api-version: '1.21'
 author: oolongho
 description: A simulation shop plugin with packet NPC customers
