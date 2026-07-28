@@ -28,6 +28,12 @@ npc:
   despawn-distance: 32
   # NPC 到达货架的判定距离（方块）
   target-reach-distance: 1
+  # NPC 移动速度（格/tick，0.15 = 约3格/秒）
+  speed: 0.15
+  # A*寻路最大搜索距离（方块）
+  pathfinding-max-distance: 32
+  # A*寻路最大迭代节点数（防止过度计算）
+  pathfinding-max-iterations: 5000
 
 market:
   # 购买概率敏感度：P = (Base / UserPrice) ^ sensitivity × global-multiplier
@@ -45,7 +51,9 @@ market:
 
 skin:
   # NPC 皮肤来源玩家名列表（Ashcon API 按名获取 skin）
-  names: [Notch, oolongho]
+  names:
+    - Notch
+    - oolongho
   # 皮肤缓存文件（落盘到 plugins/WooSimMarket/<file>）
   cache-file: skins.json
   # 异步获取皮肤的超时时间（秒）
