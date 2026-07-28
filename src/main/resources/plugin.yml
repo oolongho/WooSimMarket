@@ -1,0 +1,28 @@
+name: WooSimMarket
+version: '${project.version}'
+main: com.oolonghoo.woosimmarket.WooSimMarket
+api-version: '1.21'
+author: oolongho
+description: A simulation shop plugin with packet NPC customers
+
+depend:
+  - CraftEngine
+
+softdepend:
+  - Vault
+  - PlaceholderAPI
+
+commands:
+  woosimmarket:
+    description: 主命令
+    usage: /woosimmarket [args]
+    permission: woosimmarket.use
+    aliases: [wsm]
+
+permissions:
+  woosimmarket.use:
+    default: true
+  woosimmarket.admin:
+    default: op
+  woosimmarket.reload:
+    default: op

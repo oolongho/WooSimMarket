@@ -1,0 +1,47 @@
+# WooSimMarket English messages (MiniMessage format)
+# Placeholders {xxx} are replaced with literal values before sending; MiniMessage tags like <color:#xxxxxx> <bold> <gradient> are supported
+
+prefix: "<color:#5eead4><bold>[WooSimMarket]</bold></color> "
+
+no-permission: "<color:#f87171>You do not have permission to do this.</color>"
+player-only: "<color:#f87171>This command can only be run by a player.</color>"
+config-reloaded: "<color:#86efac>Configuration reloaded.</color>"
+
+shop-created: "<color:#86efac>Shop created.</color>"
+shop-limit-reached: "<color:#f87171>Shop limit reached, cannot create more.</color>"
+shop-too-close: "<color:#f87171>Too close to another cash register to create.</color>"
+shop-not-found: "<color:#f87171>Shop not found.</color>"
+
+shelf-bound: "<color:#86efac>Shelf bound to shop.</color>"
+shelf-too-far: "<color:#f87171>Shelf is too far from the cash register to bind.</color>"
+shelf-not-found: "<color:#f87171>Shelf not found.</color>"
+shelf-disabled: "<color:#fbbf24>This shelf is disabled.</color>"
+
+price-set: "<color:#86efac>Price set to {price}.</color>"
+price-input-prompt: "<color:#fde68a>Please type a price in chat (type cancel to abort):</color>"
+price-input-invalid: "<color:#f87171>Invalid price input, please enter a positive number.</color>"
+price-input-cancelled: "<color:#94a3b8>Pricing cancelled.</color>"
+
+withdraw-success: "<color:#86efac>Withdrew {amount} to your account.</color>"
+withdraw-failed: "<color:#f87171>Withdrawal failed, please try again later.</color>"
+withdraw-no-balance: "<color:#fbbf24>Shop balance is 0, nothing to withdraw.</color>"
+
+npc-stuck: "<color:#94a3b8>NPC stuck and despawned.</color>"
+npc-purchased: "<color:#86efac>{npc} bought {item} for {price}.</color>"
+
+gui-shelf-title: "<color:#5eead4><bold>Shelf Management</bold></color>"
+gui-shelf-set-price: "<color:#fde68a>Click to set price</color>"
+gui-shelf-current-price: "<color:#fde68a>Current price: {price}</color>"
+gui-shelf-enabled: "<color:#86efac>Enabled</color>"
+gui-shelf-disabled: "<color:#f87171>Disabled</color>"
+gui-shelf-toggle-lore: "<color:#94a3b8>Click to toggle status</color>"
+gui-shop-title: "<color:#5eead4><bold>Shop Panel</bold></color>"
+gui-shop-info: "<color:#5eead4>Shop Info</color>"
+gui-shop-withdraw: "<color:#86efac>Click to withdraw</color>"
+gui-shop-refresh: "<color:#94a3b8>Click to refresh</color>"
+gui-shop-balance: "<color:#fde68a>Current balance: {balance}</color>"
+
+command-help: "<color:#5eead4><bold>WooSimMarket Commands</bold></color>"
+command-give-success: "<color:#86efac>Gave {item} to {player}.</color>"
+command-info: "<color:#94a3b8>Shop info: ID={id} balance={balance}</color>"
+command-list: "<color:#94a3b8>{player}'s shops: {shops}</color>"

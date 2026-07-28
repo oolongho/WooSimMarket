@@ -1,0 +1,20 @@
+# WooSimMarket 标准价表
+# 每个条目定义物品的标准价格与目标销量：
+#   standard-price: NPC 购买判定的基准价（BasePrice）
+#   target-volume:  6 小时滑动窗口内的目标销量，实际销量低于目标则涨价，高于则降价
+# 物品名使用 Material 枚举名（如 DIAMOND, IRON_INGOT）
+# 由 MarketManager 加载（Task 10）
+
+items:
+  DIAMOND:
+    standard-price: 100.0
+    target-volume: 50
+  IRON_INGOT:
+    standard-price: 10.0
+    target-volume: 200
+  BREAD:
+    standard-price: 5.0
+    target-volume: 500
+  GOLDEN_APPLE:
+    standard-price: 200.0
+    target-volume: 20
