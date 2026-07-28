@@ -27,7 +27,7 @@ npc:
   # NPC 离店销毁距离（方块）
   despawn-distance: 32
   # NPC 到达货架的判定距离（方块）
-  target-reach-distance: 1.5
+  target-reach-distance: 1
 
 market:
   # 购买概率敏感度：P = (Base / UserPrice) ^ sensitivity × global-multiplier
@@ -40,18 +40,18 @@ market:
   # 时间桶数量（72 桶 × 5 分钟 = 6 小时滑动窗口）
   bucket-count: 72
   bucket-minutes: 5
-  # 全局购买倍率（管理员手动调节整体热度）
+  # 全局购买倍率（整体热度）
   global-multiplier: 1.0
 
 skin:
   # NPC 皮肤来源玩家名列表（Ashcon API 按名获取 skin）
-  names: [Notch, jeb_]
+  names: [Notch, oolongho]
   # 皮肤缓存文件（落盘到 plugins/WooSimMarket/<file>）
   cache-file: skins.json
   # 异步获取皮肤的超时时间（秒）
   fetch-timeout-seconds: 10
   # 获取失败时的兜底皮肤（STEVE / ALEX）
-  fallback: STEVE
+  fallback: oolongho
 
 database:
   # SQLite 数据库文件名（位于 plugins/WooSimMarket/ 下）
