@@ -1,56 +1,63 @@
 # WooSimMarket 中文消息（MiniMessage 格式）
 # 占位符 {xxx} 在发送前替换为字面值；MiniMessage 标签如 <color:#xxxxxx> <bold> <gradient> 可用
+# {prefix} 占位符自动替换为 prefix 键值；命令反馈消息体应显式包含 {prefix}，GUI 标题与被动通知不应包含
 
-# 消息前缀（拼接在多数消息前）
-prefix: "<white>[</white><color:#a3b547>WooSimMarket</color><white>]</white> "
+# 统一配色方案（7 色）
+#   Error      #EF4444  Warning    #F59E0B  Success    #10B981
+#   Important  #3B82F6  Secondary  #9CA3AF  Special    #5EEAD4
+#   Tip/Info   #8B5CF6
+# 前缀使用 Special 色作为 Woo 系列品牌色
+
+# 消息前缀（命令反馈消息体通过 {prefix} 占位符引用）
+prefix: "<white>[</white><color:#5EEAD4>WooSimMarket</color><white>]</white> "
 
 # 通用
-no-permission: "<color:#f87171>你没有权限执行此操作。</color>"
-player-only: "<color:#f87171>该命令只能由玩家执行。</color>"
-config-reloaded: "<color:#86efac>配置已重载。</color>"
+no-permission: "{prefix}<color:#EF4444>你没有权限执行此操作。</color>"
+player-only: "{prefix}<color:#EF4444>该命令只能由玩家执行。</color>"
+config-reloaded: "{prefix}<color:#10B981>配置已重载。</color>"
 
 # 商店
-shop-created: "<color:#86efac>商店已创建。</color>"
-shop-limit-reached: "<color:#f87171>已达商店数量上限，无法再创建。</color>"
-shop-too-close: "<color:#f87171>距离其他收银机太近，无法创建。</color>"
-shop-not-found: "<color:#f87171>未找到商店。</color>"
+shop-created: "{prefix}<color:#10B981>商店已创建。</color>"
+shop-limit-reached: "{prefix}<color:#EF4444>已达商店数量上限，无法再创建。</color>"
+shop-too-close: "{prefix}<color:#EF4444>距离其他收银机太近，无法创建。</color>"
+shop-not-found: "{prefix}<color:#EF4444>未找到商店。</color>"
 
 # 货架
-shelf-bound: "<color:#86efac>货架已绑定到商店。</color>"
-shelf-too-far: "<color:#f87171>货架距离收银机太远，无法绑定。</color>"
-shelf-not-found: "<color:#f87171>未找到货架。</color>"
-shelf-disabled: "<color:#fbbf24>该货架已禁用。</color>"
+shelf-bound: "{prefix}<color:#10B981>货架已绑定到商店。</color>"
+shelf-too-far: "{prefix}<color:#EF4444>货架距离收银机太远，无法绑定。</color>"
+shelf-not-found: "{prefix}<color:#EF4444>未找到货架。</color>"
+shelf-disabled: "{prefix}<color:#F59E0B>该货架已禁用。</color>"
 
 # 定价
-price-set: "<color:#86efac>价格已设置为 {price}。</color>"
-price-input-prompt: "<color:#fde68a>请在聊天栏输入价格（输入 cancel 取消）：</color>"
-price-input-invalid: "<color:#f87171>无效的价格输入，请输入正数。</color>"
-price-input-cancelled: "<color:#94a3b8>定价已取消。</color>"
+price-set: "{prefix}<color:#10B981>价格已设置为 {price}。</color>"
+price-input-prompt: "{prefix}<color:#F59E0B>请在聊天栏输入价格（输入 cancel 取消）：</color>"
+price-input-invalid: "{prefix}<color:#EF4444>无效的价格输入，请输入正数。</color>"
+price-input-cancelled: "{prefix}<color:#9CA3AF>定价已取消。</color>"
 
 # 提现
-withdraw-success: "<color:#86efac>已提现 {amount} 到你的账户。</color>"
-withdraw-failed: "<color:#f87171>提现失败，请稍后重试。</color>"
-withdraw-no-balance: "<color:#fbbf24>商店余额为 0，无可提现。</color>"
+withdraw-success: "{prefix}<color:#10B981>已提现 {amount} 到你的账户。</color>"
+withdraw-failed: "{prefix}<color:#EF4444>提现失败，请稍后重试。</color>"
+withdraw-no-balance: "{prefix}<color:#F59E0B>商店余额为 0，无可提现。</color>"
 
-# NPC
-npc-stuck: "<color:#94a3b8>NPC 卡住已销毁。</color>"
-npc-purchased: "<color:#86efac>{npc} 购买了 {item}，单价 {price}。</color>"
+# NPC（被动通知，不带 {prefix}）
+npc-stuck: "<color:#9CA3AF>NPC 卡住已销毁。</color>"
+npc-purchased: "<color:#10B981>{npc} 购买了 {item}，单价 {price}。</color>"
 
-# GUI 标题与按钮
-gui-shelf-title: "<color:#5eead4><bold>货架管理</bold></color>"
-gui-shelf-set-price: "<color:#fde68a>点击设定价格</color>"
-gui-shelf-current-price: "<color:#fde68a>当前价格: {price}</color>"
-gui-shelf-enabled: "<color:#86efac>已启用</color>"
-gui-shelf-disabled: "<color:#f87171>已禁用</color>"
-gui-shelf-toggle-lore: "<color:#94a3b8>点击切换状态</color>"
-gui-shop-title: "<color:#5eead4><bold>商店面板</bold></color>"
-gui-shop-info: "<color:#5eead4>商店信息</color>"
-gui-shop-withdraw: "<color:#86efac>点击提现</color>"
-gui-shop-refresh: "<color:#94a3b8>点击刷新</color>"
-gui-shop-balance: "<color:#fde68a>当前余额: {balance}</color>"
+# GUI 标题与按钮（GUI 标题非聊天消息，不带 {prefix}）
+gui-shelf-title: "<color:#5EEAD4><bold>货架管理</bold></color>"
+gui-shelf-set-price: "<color:#F59E0B>点击设定价格</color>"
+gui-shelf-current-price: "<color:#F59E0B>当前价格: {price}</color>"
+gui-shelf-enabled: "<color:#10B981>已启用</color>"
+gui-shelf-disabled: "<color:#EF4444>已禁用</color>"
+gui-shelf-toggle-lore: "<color:#9CA3AF>点击切换状态</color>"
+gui-shop-title: "<color:#5EEAD4><bold>商店面板</bold></color>"
+gui-shop-info: "<color:#5EEAD4>商店信息</color>"
+gui-shop-withdraw: "<color:#10B981>点击提现</color>"
+gui-shop-refresh: "<color:#9CA3AF>点击刷新</color>"
+gui-shop-balance: "<color:#F59E0B>当前余额: {balance}</color>"
 
 # 命令
-command-help: "<color:#5eead4><bold>WooSimMarket 命令</bold></color>"
-command-give-success: "<color:#86efac>已将 {item} 给予 {player}。</color>"
-command-info: "<color:#94a3b8>商店信息：ID={id} 余额={balance}</color>"
-command-list: "<color:#94a3b8>{player} 的商店列表：{shops}</color>"
+command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket 命令</bold></color>"
+command-give-success: "{prefix}<color:#10B981>已将 {item} 给予 {player}。</color>"
+command-info: "{prefix}<color:#9CA3AF>商店信息：ID={id} 余额={balance}</color>"
+command-list: "{prefix}<color:#9CA3AF>{player} 的商店列表：{shops}</color>"

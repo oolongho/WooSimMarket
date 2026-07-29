@@ -29,9 +29,20 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
  * <p>占位符采用 {@code {xxx}} 风格（与 WooHolograms 一致），替换为字面值后再由
  * MiniMessage 解析；注意替换值中的 MiniMessage 标签会被解析，如需字面显示请转义。</p>
  *
+ * <p>{@code {prefix}} 占位符策略：由 {@link #get(String, String...)} 自动替换为 lang 中
+ * {@code prefix} 键值，调用方无需拼接。命令反馈消息体应显式书写 {@code {prefix}}；
+ * GUI 标题与被动通知不应包含该占位符。{@link #getWithPrefix(String, String...)} 已
+ * 标记 {@link Deprecated}，仅为向后兼容保留，内部直接委托 {@link #get}。</p>
+ *
  * @author oolongho
  */
 public class Messages {
+
+    /** prefix 占位符，写在消息体中由 get 自动替换 */
+    private static final String PREFIX_PLACEHOLDER = "{prefix}";
+
+    /** prefix 键名，用于获取前缀值（即使 replacements 中传 prefix 也会被忽略） */
+    private static final String PREFIX_KEY = "prefix";
 
     private final WooSimMarket plugin;
     private final MiniMessage miniMessage;
@@ -143,29 +154,33 @@ public class Messages {
     }
 
     /**
-     * 获取消息并解析为 Component。
+     * 获取消息并解析为 Component。自动替换 {@code {prefix}} 占位符为 lang 中
+     * {@code prefix} 键值。
      *
      * @param key 消息键
      * @return 解析后的 Component；键不存在则返回包含 key 的字面 Component
      */
     public Component get(String key) {
-        return parse(getRaw(key));
+        return parse(replace(getRaw(key)));
     }
 
     /**
-     * 获取带前缀的消息并解析为 Component。前缀与消息拼接为整体后再解析，
-     * 使 prefix 中的 MiniMessage 标签可作用于消息体。
+     * @deprecated 已由消息体 {@code {prefix}} 占位符替代，直接调用 {@link #get(String)} 即可。
      *
      * @param key 消息键
-     * @return 带前缀的 Component
+     * @return 解析后的 Component
      */
+    @Deprecated
     public Component getWithPrefix(String key) {
-        return parse(getRaw("prefix") + getRaw(key));
+        return get(key);
     }
 
     /**
      * 获取消息，按 {@code {xxx}} 占位符替换为字面值后解析为 Component。
-     * replacements 为键值对序列：{@code {"item", "钻石", "price", "100"}}。
+     *
+     * <p>{@code {prefix}} 自动替换为 lang 中 {@code prefix} 键值，其余 {@code {xxx}}
+     * 由 replacements 替换。replacements 为键值对序列：
+     * {@code {"item", "钻石", "price", "100"}}。</p>
      *
      * @param key 消息键
      * @param replacements 占位符键值对
@@ -176,23 +191,50 @@ public class Messages {
     }
 
     /**
-     * 获取带前缀的消息，并按 {@code {xxx}} 占位符替换为字面值后解析为 Component。
+     * @deprecated 已由消息体 {@code {prefix}} 占位符替代，直接调用
+     * {@link #get(String, String...)} 即可。
      *
      * @param key 消息键
      * @param replacements 占位符键值对
-     * @return 带前缀且替换后的 Component
+     * @return 替换并解析后的 Component
      */
+    @Deprecated
     public Component getWithPrefix(String key, String... replacements) {
-        return parse(replace(getRaw("prefix") + getRaw(key), replacements));
+        return get(key, replacements);
     }
 
     /**
-     * 替换 {@code {xxx}} 占位符为字面值。
+     * 替换 {@code {prefix}} 占位符为 lang 中 {@code prefix} 键值，再替换
+     * replacements 中的其他 {@code {xxx}} 占位符为字面值。
+     *
+     * <p>规则：
+     * <ul>
+     *   <li>replacements 中传 {@code prefix} 键会被忽略并打印告警（{prefix} 是保留占位符）</li>
+     *   <li>{@code null} 键或值会被安全处理（键跳过，值替换为空串）</li>
+     *   <li>消息体无 {@code {prefix}} 时此步骤为 no-op，GUI 标题调用安全</li>
+     * </ul>
+     *
+     * @param message 原始消息
+     * @param replacements 占位符键值对
+     * @return 替换后的消息
      */
     private String replace(String message, String... replacements) {
-        for (int i = 0; i + 1 < replacements.length; i += 2) {
-            message = message.replace("{" + replacements[i] + "}", replacements[i + 1]);
+        if (replacements != null && replacements.length > 0) {
+            for (int i = 0; i + 1 < replacements.length; i += 2) {
+                String placeholder = replacements[i];
+                String value = replacements[i + 1];
+                if (placeholder == null) continue;
+                if (PREFIX_KEY.equalsIgnoreCase(placeholder)) {
+                    plugin.getLogger().warning(
+                            "Messages.get('" + placeholder + "') 被显式传入 prefix 替换值，已忽略。"
+                                    + "请在消息体中使用 {prefix} 占位符，不要在代码中传 prefix。");
+                    continue;
+                }
+                message = message.replace("{" + placeholder + "}", value == null ? "" : value);
+            }
         }
+        // 自动替换 {prefix}（即使 replacements 未传 prefix）
+        message = message.replace(PREFIX_PLACEHOLDER, getRaw(PREFIX_KEY));
         return message;
     }
 
@@ -216,47 +258,47 @@ public class Messages {
     }
 
     /**
-     * 向玩家发送带前缀的消息。
+     * 向玩家发送消息。消息体应显式包含 {@code {prefix}} 占位符以携带前缀。
      *
      * @param player 玩家
      * @param key    消息键
      */
     public void send(Player player, String key) {
-        player.sendMessage(getWithPrefix(key));
+        player.sendMessage(get(key));
     }
 
     /**
-     * 向玩家发送带前缀的消息，并替换占位符。
+     * 向玩家发送消息，并替换占位符。消息体应显式包含 {@code {prefix}} 占位符以携带前缀。
      *
      * @param player        玩家
      * @param key           消息键
      * @param replacements 占位符键值对
      */
     public void send(Player player, String key, String... replacements) {
-        player.sendMessage(getWithPrefix(key, replacements));
+        player.sendMessage(get(key, replacements));
     }
 
     /**
-     * 向命令发送者（可以是控制台或玩家）发送带前缀的消息。
+     * 向命令发送者（可以是控制台或玩家）发送消息。
      *
      * <p>Paper 的 {@link CommandSender} 实现了 {@code Audience} 接口，
-     * 可直接发送 Adventure Component。</p>
+     * 可直接发送 Adventure Component。消息体应显式包含 {@code {prefix}} 占位符以携带前缀。</p>
      *
      * @param sender        发送者
      * @param key           消息键
      */
     public void send(CommandSender sender, String key) {
-        sender.sendMessage(getWithPrefix(key));
+        sender.sendMessage(get(key));
     }
 
     /**
-     * 向命令发送者发送带前缀的消息，并替换占位符。
+     * 向命令发送者发送消息，并替换占位符。消息体应显式包含 {@code {prefix}} 占位符以携带前缀。
      *
      * @param sender        发送者
      * @param key           消息键
      * @param replacements 占位符键值对
      */
     public void send(CommandSender sender, String key, String... replacements) {
-        sender.sendMessage(getWithPrefix(key, replacements));
+        sender.sendMessage(get(key, replacements));
     }
 }

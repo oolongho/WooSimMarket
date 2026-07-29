@@ -1,47 +1,54 @@
 # WooSimMarket English messages (MiniMessage format)
 # Placeholders {xxx} are replaced with literal values before sending; MiniMessage tags like <color:#xxxxxx> <bold> <gradient> are supported
+# {prefix} is auto-replaced with the prefix key value; command feedback messages should include {prefix} explicitly, GUI titles and passive notifications should not
 
-prefix: "<white>[</white><color:#a3b547>WooSimMarket</color><white>]</white> "
+# Unified color scheme (7 colors)
+#   Error      #EF4444  Warning    #F59E0B  Success    #10B981
+#   Important  #3B82F6  Secondary  #9CA3AF  Special    #5EEAD4
+#   Tip/Info   #8B5CF6
+# Prefix uses Special color as Woo series brand color
 
-no-permission: "<color:#f87171>You do not have permission to do this.</color>"
-player-only: "<color:#f87171>This command can only be run by a player.</color>"
-config-reloaded: "<color:#86efac>Configuration reloaded.</color>"
+prefix: "<white>[</white><color:#5EEAD4>WooSimMarket</color><white>]</white> "
 
-shop-created: "<color:#86efac>Shop created.</color>"
-shop-limit-reached: "<color:#f87171>Shop limit reached, cannot create more.</color>"
-shop-too-close: "<color:#f87171>Too close to another cash register to create.</color>"
-shop-not-found: "<color:#f87171>Shop not found.</color>"
+no-permission: "{prefix}<color:#EF4444>You do not have permission to do this.</color>"
+player-only: "{prefix}<color:#EF4444>This command can only be run by a player.</color>"
+config-reloaded: "{prefix}<color:#10B981>Configuration reloaded.</color>"
 
-shelf-bound: "<color:#86efac>Shelf bound to shop.</color>"
-shelf-too-far: "<color:#f87171>Shelf is too far from the cash register to bind.</color>"
-shelf-not-found: "<color:#f87171>Shelf not found.</color>"
-shelf-disabled: "<color:#fbbf24>This shelf is disabled.</color>"
+shop-created: "{prefix}<color:#10B981>Shop created.</color>"
+shop-limit-reached: "{prefix}<color:#EF4444>Shop limit reached, cannot create more.</color>"
+shop-too-close: "{prefix}<color:#EF4444>Too close to another cash register to create.</color>"
+shop-not-found: "{prefix}<color:#EF4444>Shop not found.</color>"
 
-price-set: "<color:#86efac>Price set to {price}.</color>"
-price-input-prompt: "<color:#fde68a>Please type a price in chat (type cancel to abort):</color>"
-price-input-invalid: "<color:#f87171>Invalid price input, please enter a positive number.</color>"
-price-input-cancelled: "<color:#94a3b8>Pricing cancelled.</color>"
+shelf-bound: "{prefix}<color:#10B981>Shelf bound to shop.</color>"
+shelf-too-far: "{prefix}<color:#EF4444>Shelf is too far from the cash register to bind.</color>"
+shelf-not-found: "{prefix}<color:#EF4444>Shelf not found.</color>"
+shelf-disabled: "{prefix}<color:#F59E0B>This shelf is disabled.</color>"
 
-withdraw-success: "<color:#86efac>Withdrew {amount} to your account.</color>"
-withdraw-failed: "<color:#f87171>Withdrawal failed, please try again later.</color>"
-withdraw-no-balance: "<color:#fbbf24>Shop balance is 0, nothing to withdraw.</color>"
+price-set: "{prefix}<color:#10B981>Price set to {price}.</color>"
+price-input-prompt: "{prefix}<color:#F59E0B>Please type a price in chat (type cancel to abort):</color>"
+price-input-invalid: "{prefix}<color:#EF4444>Invalid price input, please enter a positive number.</color>"
+price-input-cancelled: "{prefix}<color:#9CA3AF>Pricing cancelled.</color>"
 
-npc-stuck: "<color:#94a3b8>NPC stuck and despawned.</color>"
-npc-purchased: "<color:#86efac>{npc} bought {item} for {price}.</color>"
+withdraw-success: "{prefix}<color:#10B981>Withdrew {amount} to your account.</color>"
+withdraw-failed: "{prefix}<color:#EF4444>Withdrawal failed, please try again later.</color>"
+withdraw-no-balance: "{prefix}<color:#F59E0B>Shop balance is 0, nothing to withdraw.</color>"
 
-gui-shelf-title: "<color:#5eead4><bold>Shelf Management</bold></color>"
-gui-shelf-set-price: "<color:#fde68a>Click to set price</color>"
-gui-shelf-current-price: "<color:#fde68a>Current price: {price}</color>"
-gui-shelf-enabled: "<color:#86efac>Enabled</color>"
-gui-shelf-disabled: "<color:#f87171>Disabled</color>"
-gui-shelf-toggle-lore: "<color:#94a3b8>Click to toggle status</color>"
-gui-shop-title: "<color:#5eead4><bold>Shop Panel</bold></color>"
-gui-shop-info: "<color:#5eead4>Shop Info</color>"
-gui-shop-withdraw: "<color:#86efac>Click to withdraw</color>"
-gui-shop-refresh: "<color:#94a3b8>Click to refresh</color>"
-gui-shop-balance: "<color:#fde68a>Current balance: {balance}</color>"
+npc-stuck: "<color:#9CA3AF>NPC stuck and despawned.</color>"
+npc-purchased: "<color:#10B981>{npc} bought {item} for {price}.</color>"
 
-command-help: "<color:#5eead4><bold>WooSimMarket Commands</bold></color>"
-command-give-success: "<color:#86efac>Gave {item} to {player}.</color>"
-command-info: "<color:#94a3b8>Shop info: ID={id} balance={balance}</color>"
-command-list: "<color:#94a3b8>{player}'s shops: {shops}</color>"
+gui-shelf-title: "<color:#5EEAD4><bold>Shelf Management</bold></color>"
+gui-shelf-set-price: "<color:#F59E0B>Click to set price</color>"
+gui-shelf-current-price: "<color:#F59E0B>Current price: {price}</color>"
+gui-shelf-enabled: "<color:#10B981>Enabled</color>"
+gui-shelf-disabled: "<color:#EF4444>Disabled</color>"
+gui-shelf-toggle-lore: "<color:#9CA3AF>Click to toggle status</color>"
+gui-shop-title: "<color:#5EEAD4><bold>Shop Panel</bold></color>"
+gui-shop-info: "<color:#5EEAD4>Shop Info</color>"
+gui-shop-withdraw: "<color:#10B981>Click to withdraw</color>"
+gui-shop-refresh: "<color:#9CA3AF>Click to refresh</color>"
+gui-shop-balance: "<color:#F59E0B>Current balance: {balance}</color>"
+
+command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket Commands</bold></color>"
+command-give-success: "{prefix}<color:#10B981>Gave {item} to {player}.</color>"
+command-info: "{prefix}<color:#9CA3AF>Shop info: ID={id} balance={balance}</color>"
+command-list: "{prefix}<color:#9CA3AF>{player}'s shops: {shops}</color>"
