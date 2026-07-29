@@ -301,7 +301,10 @@ public class NpcManager {
 
         if (configLoader.isDebug()) {
             plugin.getLogger().info(() -> String.format(
-                    "生成 NPC %s → 商店 %s → 货架 %s（等待寻路）", name, shop.id(), target.id()));
+                    "生成 NPC %s → 商店 %s → 货架 %s start=(%d,%d,%d) target=(%d,%d,%d)（等待寻路）",
+                    name, shop.id(), target.id(),
+                    spawnLoc.getBlockX(), spawnLoc.getBlockY(), spawnLoc.getBlockZ(),
+                    target.x(), target.y(), target.z()));
         }
 
         // 提交异步 A* 寻路（回调在主线程执行，可安全操作 NPC）

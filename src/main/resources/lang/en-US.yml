@@ -1,7 +1,7 @@
 # WooSimMarket English messages (MiniMessage format)
 # Placeholders {xxx} are replaced with literal values before sending; MiniMessage tags like <color:#xxxxxx> <bold> <gradient> are supported
 
-prefix: "<color:#5eead4><bold>[WooSimMarket]</bold></color> "
+prefix: "<white>[</white><color:#a3b547>WooSimMarket</color><white>]</white> "
 
 no-permission: "<color:#f87171>You do not have permission to do this.</color>"
 player-only: "<color:#f87171>This command can only be run by a player.</color>"

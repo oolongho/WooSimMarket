@@ -2,7 +2,7 @@
 # 占位符 {xxx} 在发送前替换为字面值；MiniMessage 标签如 <color:#xxxxxx> <bold> <gradient> 可用
 
 # 消息前缀（拼接在多数消息前）
-prefix: "<color:#5eead4><bold>[WooSimMarket]</bold></color> "
+prefix: "<white>[</white><color:#a3b547>WooSimMarket</color><white>]</white> "
 
 # 通用
 no-permission: "<color:#f87171>你没有权限执行此操作。</color>"

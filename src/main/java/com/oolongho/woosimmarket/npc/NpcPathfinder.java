@@ -54,8 +54,22 @@ public final class NpcPathfinder {
                                 Location start, Location target,
                                 int maxDistance, int maxIterations,
                                 Consumer<List<Location>> callback) {
+        boolean debug = plugin.getConfigLoader().isDebug();
+
+        if (debug) {
+            plugin.getLogger().info(() -> String.format(
+                    "[Pathfinder] 寻路请求: start=(%d,%d,%d) target=(%d,%d,%d) maxDist=%d maxIter=%d",
+                    start.getBlockX(), start.getBlockY(), start.getBlockZ(),
+                    target.getBlockX(), target.getBlockY(), target.getBlockZ(),
+                    maxDistance, maxIterations));
+        }
+
         // 主线程阶段：收集 ChunkSnapshot
         Map<Long, ChunkSnapshot> snapshots = collectSnapshots(world, start, target, maxDistance);
+
+        if (debug) {
+            plugin.getLogger().info(() -> "[Pathfinder] 已收集 " + snapshots.size() + " 个区块快照");
+        }
 
         // 异步阶段：A* 算法在 ChunkSnapshot 上运行
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -68,6 +82,15 @@ public final class NpcPathfinder {
             }
             // 回调阶段：切换回主线程
             final List<Location> result = path;
+            if (debug) {
+                if (result == null) {
+                    plugin.getLogger().info(() -> "[Pathfinder] 寻路失败: 未找到路径（迭代上限或开放集耗尽）");
+                } else if (result.isEmpty()) {
+                    plugin.getLogger().info(() -> "[Pathfinder] 寻路完成: 路径为空（起点已相邻于目标）");
+                } else {
+                    plugin.getLogger().info(() -> "[Pathfinder] 寻路成功: " + result.size() + " 个路径点");
+                }
+            }
             Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
         });
     }
@@ -156,8 +179,11 @@ public final class NpcPathfinder {
                 continue;
             }
 
-            // 到达目标
-            if (current.x == targetX && current.y == targetY && current.z == targetZ) {
+            // 到达目标附近 —— 货架本身为固体方块不可行走，NPC 停在相邻可行走方块即可
+            // （XZ 1 格、Y 1 格容差，覆盖平走/上下台阶情形；current 已保证可行走）
+            if (Math.abs(current.x - targetX) <= 1
+                    && Math.abs(current.y - targetY) <= 1
+                    && Math.abs(current.z - targetZ) <= 1) {
                 return buildPath(current, world);
             }
 
