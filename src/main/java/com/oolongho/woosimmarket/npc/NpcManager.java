@@ -41,9 +41,6 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class NpcManager {
 
-    /** NPC 移动速度（方块/tick，约 5 方块/秒）。 */
-    private static final double NPC_SPEED = 0.25;
-
     /** 视距广播半径（方块）。 */
     private static final double BROADCAST_RADIUS = 48.0;
 
@@ -138,7 +135,7 @@ public class NpcManager {
         Shelf shelf = shopManager.getShelf(npc.shelfId());
         if (shelf == null || !shelf.canSell()) {
             // 货架不存在或无可售商品，直接离开
-            startLeaving(npc);
+            npc.startLeaving();
             return;
         }
 
@@ -154,7 +151,7 @@ public class NpcManager {
         }
 
         // 无论购买与否，NPC 离开
-        startLeaving(npc);
+        npc.startLeaving();
     }
 
     /**
@@ -223,44 +220,6 @@ public class NpcManager {
     }
 
     /**
-     * 让 NPC 朝远离商店的方向离开。
-     *
-     * @param npc NPC
-     */
-    private void startLeaving(SimNpc npc) {
-        Shop shop = shopManager.getShop(npc.shopId());
-        if (shop == null) {
-            despawnNpc(npc);
-            return;
-        }
-
-        World world = Bukkit.getWorld(shop.world());
-        if (world == null) {
-            despawnNpc(npc);
-            return;
-        }
-
-        // 朝远离商店的方向生成离开目标点
-        double dx = npc.location().getX() - shop.x();
-        double dz = npc.location().getZ() - shop.z();
-        double len = Math.sqrt(dx * dx + dz * dz);
-        if (len < 0.001) {
-            // NPC 正好在商店位置，随机选一个方向离开
-            double angle = ThreadLocalRandom.current().nextDouble(0, Math.PI * 2);
-            dx = Math.cos(angle);
-            dz = Math.sin(angle);
-            len = 1.0;
-        }
-
-        double despawnDist = configLoader.getNpcDespawnDistance();
-        double leaveX = npc.location().getX() + (dx / len) * despawnDist;
-        double leaveZ = npc.location().getZ() + (dz / len) * despawnDist;
-
-        Location leaveTarget = new Location(world, leaveX, npc.location().getY(), leaveZ);
-        npc.startLeaving(leaveTarget);
-    }
-
-    /**
      * 销毁 NPC：向所有曾收到 spawn 包的玩家发送移除包、清理内存索引。
      *
      * @param npc NPC
@@ -287,6 +246,10 @@ public class NpcManager {
 
     /**
      * 尝试为商店生成 1 个 NPC。
+     *
+     * <p>生命周期：创建 NPC（{@link SimNpc.State#WAITING_FOR_PATH}）→ 注册到索引 →
+     * 提交异步 A* 寻路 → 寻路回调中 setPath + spawnToNearby 或 despawnNpc。
+     * 此时不发送 spawn 包（路径未就绪）。</p>
      *
      * @param shop 商店
      */
@@ -320,29 +283,49 @@ public class NpcManager {
         // 在商店半径外生成刷新点
         Location spawnLoc = generateSpawnLocation(shop, world);
 
-        // 创建 NPC，皮肤从缓存获取（未命中时 null → Steve 兜底）
+        // 创建 NPC：初始状态 WAITING_FOR_PATH，不传 target（路径由异步 A* 寻路提供）
         String name = pickName();
         SimNpc.SkinData skin = skinCache.getSkin(name);
         SimNpc npc = new SimNpc(
                 UUID.randomUUID(), name, skin,
                 shop.id(), target.id(),
-                spawnLoc, targetLoc,
-                NPC_SPEED,
+                spawnLoc,
+                configLoader.getNpcSpeed(),
                 configLoader.getNpcTargetReachDistance(),
                 configLoader.getNpcStuckThresholdSeconds(),
                 configLoader.getNpcStuckThresholdDistance());
 
-        // 发送生成包
-        packetSender.spawnToNearby(npc, BROADCAST_RADIUS);
-
-        // 注册到内存索引
+        // 先注册到内存索引（tick() 处理 WAITING_FOR_PATH 返回 IDLE，不移动不发包）
         npcsById.put(npc.uuid(), npc);
         npcsByShop.computeIfAbsent(shop.id(), k -> new ArrayList<>()).add(npc.uuid());
 
         if (configLoader.isDebug()) {
             plugin.getLogger().info(() -> String.format(
-                    "生成 NPC %s → 商店 %s → 货架 %s", name, shop.id(), target.id()));
+                    "生成 NPC %s → 商店 %s → 货架 %s（等待寻路）", name, shop.id(), target.id()));
         }
+
+        // 提交异步 A* 寻路（回调在主线程执行，可安全操作 NPC）
+        NpcPathfinder.findPath(
+                plugin, world, spawnLoc, targetLoc,
+                configLoader.getNpcPathfindingMaxDistance(),
+                configLoader.getNpcPathfindingMaxIterations(),
+                path -> {
+                    // 防御：NPC 可能已在 stop() 或其他流程中销毁，避免生成幽灵 NPC
+                    if (!npcsById.containsKey(npc.uuid())) {
+                        return;
+                    }
+                    if (path == null || path.isEmpty()) {
+                        plugin.getLogger().info(() -> "NPC " + name + " 寻路失败，销毁");
+                        despawnNpc(npc);
+                        return;
+                    }
+                    // 路径就绪：setPath 切换到 MOVING 状态，发送生成包
+                    npc.setPath(path);
+                    packetSender.spawnToNearby(npc, BROADCAST_RADIUS);
+                    if (configLoader.isDebug()) {
+                        plugin.getLogger().info(() -> "NPC " + name + " 寻路成功，" + path.size() + " 个路径点");
+                    }
+                });
     }
 
     /**

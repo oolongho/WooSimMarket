@@ -222,4 +222,19 @@ public class ConfigLoader {
     public String getDatabaseFile() {
         return databaseFile;
     }
+
+    /** NPC 移动速度（格/tick）。 */
+    public double getNpcSpeed() {
+        return config.getDouble("npc.speed", 0.15);
+    }
+
+    /** A* 寻路最大搜索距离（方块）。 */
+    public int getNpcPathfindingMaxDistance() {
+        return config.getInt("npc.pathfinding-max-distance", 32);
+    }
+
+    /** A* 寻路最大迭代节点数。 */
+    public int getNpcPathfindingMaxIterations() {
+        return config.getInt("npc.pathfinding-max-iterations", 5000);
+    }
 }
