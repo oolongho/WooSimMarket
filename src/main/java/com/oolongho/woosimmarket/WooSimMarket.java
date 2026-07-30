@@ -15,6 +15,7 @@ import com.oolongho.woosimmarket.hook.PlaceholderAPIHook;
 import com.oolongho.woosimmarket.hook.VaultHook;
 import com.oolongho.woosimmarket.listener.BlockListener;
 import com.oolongho.woosimmarket.listener.ChatListener;
+import com.oolongho.woosimmarket.listener.ChunkListener;
 import com.oolongho.woosimmarket.listener.PlayerListener;
 import com.oolongho.woosimmarket.market.MarketManager;
 import com.oolongho.woosimmarket.npc.NpcManager;
@@ -22,6 +23,8 @@ import com.oolongho.woosimmarket.npc.NpcPacketSender;
 import com.oolongho.woosimmarket.npc.NpcSkinCache;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
+import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
 import com.oolongho.woosimmarket.command.MainCommand;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -67,6 +70,8 @@ public class WooSimMarket extends JavaPlugin {
     private NpcPacketSender npcPacketSender;
     private NpcSkinCache npcSkinCache;
     private NpcManager npcManager;
+    private ShelfDisplayManager shelfDisplayManager;
+    private ShopRangeVisualizer shopRangeVisualizer;
 
     @Override
     public void onEnable() {
@@ -96,13 +101,9 @@ public class WooSimMarket extends JavaPlugin {
         shopDao = new ShopDao(databaseManager);
         shelfDao = new ShelfDao(databaseManager);
 
-        // 5. CraftEngine 钩子（硬依赖）
-        craftEngineHook = new CraftEngineHook(this);
-        if (!craftEngineHook.init()) {
-            getLogger().severe("CraftEngine 不可用，插件将禁用");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
+        // 5. CraftEngine 钩子（软依赖：未安装时降级为原版方块模式）
+        craftEngineHook = new CraftEngineHook(this, configLoader);
+        craftEngineHook.init();
 
         // 6. Vault 钩子（软依赖，降级运行）
         vaultHook = new VaultHook(this);
@@ -111,6 +112,11 @@ public class WooSimMarket extends JavaPlugin {
         // 7. ShopManager（加载 DB 数据到内存）
         shopManager = new ShopManager(this, shopDao, shelfDao, craftEngineHook);
         shopManager.loadAll();
+
+        // 7.5. 可视化管理器（依赖 ShopManager 内存数据，需在 loadAll 之后初始化）
+        shelfDisplayManager = new ShelfDisplayManager(this, shopManager, configLoader);
+        shelfDisplayManager.init();
+        shopRangeVisualizer = new ShopRangeVisualizer(this, configLoader);
 
         // 8. PricingManager
         pricingManager = new PricingManager(shopManager, messages);
@@ -123,13 +129,13 @@ public class WooSimMarket extends JavaPlugin {
         marketManager.start();
 
         // 11. NPC 系统（纯发包，依赖 ShopManager + MarketManager 数据）
-        npcPacketSender = new NpcPacketSender();
+        npcPacketSender = new NpcPacketSender(configLoader);
         npcSkinCache = new NpcSkinCache(this, configLoader.getSkinCacheFile(),
                 configLoader.getSkinFetchTimeoutSeconds());
         npcSkinCache.load();
         npcSkinCache.preloadAsync(configLoader.getSkinNames());
         npcManager = new NpcManager(this, shopManager, npcPacketSender, configLoader, messages,
-                npcSkinCache, marketManager);
+                npcSkinCache, marketManager, shelfDisplayManager);
         npcManager.start();
 
         // 12. 注册监听器
@@ -162,6 +168,10 @@ public class WooSimMarket extends JavaPlugin {
         if (npcManager != null) {
             npcManager.stop();
         }
+        // 移除所有货架展示实体（优雅关闭，避免客户端残留）
+        if (shelfDisplayManager != null) {
+            shelfDisplayManager.clearAll();
+        }
         // 关闭动态市场（取消桶滚动任务）
         if (marketManager != null) {
             marketManager.stop();
@@ -189,15 +199,18 @@ public class WooSimMarket extends JavaPlugin {
 
     private void registerListeners() {
         Bukkit.getPluginManager().registerEvents(
-                new BlockListener(this, shopManager, craftEngineHook, messages), this);
+                new BlockListener(this, shopManager, craftEngineHook, messages,
+                        shelfDisplayManager, shopRangeVisualizer), this);
         Bukkit.getPluginManager().registerEvents(
-                new ShelfGuiListener(this, shopManager, pricingManager, messages), this);
+                new ShelfGuiListener(this, shopManager, pricingManager, messages, shelfDisplayManager), this);
         Bukkit.getPluginManager().registerEvents(
                 new ShopGuiListener(economyManager, messages), this);
         Bukkit.getPluginManager().registerEvents(
                 new ChatListener(this, pricingManager), this);
         Bukkit.getPluginManager().registerEvents(
                 new PlayerListener(npcPacketSender), this);
+        Bukkit.getPluginManager().registerEvents(
+                new ChunkListener(shelfDisplayManager), this);
     }
 
     // ===== Getter =====
@@ -244,5 +257,13 @@ public class WooSimMarket extends JavaPlugin {
 
     public NpcPacketSender getNpcPacketSender() {
         return npcPacketSender;
+    }
+
+    public ShelfDisplayManager getShelfDisplayManager() {
+        return shelfDisplayManager;
+    }
+
+    public ShopRangeVisualizer getShopRangeVisualizer() {
+        return shopRangeVisualizer;
     }
 }

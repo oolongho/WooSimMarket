@@ -1,12 +1,4 @@
-# WooSimMarket 中文消息（MiniMessage 格式）
-# 占位符 {xxx} 在发送前替换为字面值；MiniMessage 标签如 <color:#xxxxxx> <bold> <gradient> 可用
-# {prefix} 占位符自动替换为 prefix 键值；命令反馈消息体应显式包含 {prefix}，GUI 标题与被动通知不应包含
-
-# 统一配色方案（7 色）
-#   Error      #EF4444  Warning    #F59E0B  Success    #10B981
-#   Important  #3B82F6  Secondary  #9CA3AF  Special    #5EEAD4
-#   Tip/Info   #8B5CF6
-# 前缀使用 Special 色作为 Woo 系列品牌色
+# WooSimMarket 中文语言文件
 
 # 消息前缀（命令反馈消息体通过 {prefix} 占位符引用）
 prefix: "<white>[</white><color:#5EEAD4>WooSimMarket</color><white>]</white> "
@@ -23,10 +15,14 @@ shop-too-close: "{prefix}<color:#EF4444>距离其他收银机太近，无法创�
 shop-not-found: "{prefix}<color:#EF4444>未找到商店。</color>"
 
 # 货架
-shelf-bound: "{prefix}<color:#10B981>货架已绑定到商店。</color>"
+shelf-bound: "{prefix}<color:#10B981>货架已绑定到商店，请打开货架管理界面启用。</color>"
 shelf-too-far: "{prefix}<color:#EF4444>货架距离收银机太远，无法绑定。</color>"
 shelf-not-found: "{prefix}<color:#EF4444>未找到货架。</color>"
 shelf-disabled: "{prefix}<color:#F59E0B>该货架已禁用。</color>"
+
+# 可视化
+range-not-found: "{prefix}<color:#EF4444>附近未找到你的商店。</color>"
+range-showing: "{prefix}<color:#10B981>已显示商店范围，持续 {seconds} 秒。</color>"
 
 # 定价
 price-set: "{prefix}<color:#10B981>价格已设置为 {price}。</color>"

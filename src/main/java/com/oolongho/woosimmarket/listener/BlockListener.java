@@ -8,6 +8,8 @@ import com.oolongho.woosimmarket.hook.CraftEngineHook;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
+import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Player;
@@ -35,13 +37,19 @@ public class BlockListener implements Listener {
     private final ShopManager shopManager;
     private final CraftEngineHook craftEngine;
     private final Messages messages;
+    private final ShelfDisplayManager shelfDisplayManager;
+    private final ShopRangeVisualizer shopRangeVisualizer;
 
     public BlockListener(WooSimMarket plugin, ShopManager shopManager,
-                         CraftEngineHook craftEngine, Messages messages) {
+                         CraftEngineHook craftEngine, Messages messages,
+                         ShelfDisplayManager shelfDisplayManager,
+                         ShopRangeVisualizer shopRangeVisualizer) {
         this.plugin = plugin;
         this.shopManager = shopManager;
         this.craftEngine = craftEngine;
         this.messages = messages;
+        this.shelfDisplayManager = shelfDisplayManager;
+        this.shopRangeVisualizer = shopRangeVisualizer;
     }
 
     /**
@@ -50,9 +58,6 @@ public class BlockListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onBlockPlace(BlockPlaceEvent event) {
         Block block = event.getBlockPlaced();
-        if (!craftEngine.isReady()) {
-            return;
-        }
 
         if (craftEngine.isCashRegister(block)) {
             handleCashRegisterPlace(event, block);
@@ -67,9 +72,6 @@ public class BlockListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (!craftEngine.isReady()) {
-            return;
-        }
 
         String world = block.getWorld().getName();
         int x = block.getX();
@@ -79,6 +81,9 @@ public class BlockListener implements Listener {
         if (craftEngine.isCashRegister(block)) {
             Shop shop = shopManager.getShopAt(world, x, y, z);
             if (shop != null) {
+                // 必须在 removeShop 之前移除展示：removeShop 会清空关联货架索引，
+                // 之后再调用 removeShelvesByShop 将查不到货架
+                shelfDisplayManager.removeShelvesByShop(shop.id());
                 shopManager.removeShop(shop.id());
                 plugin.getLogger().info(() -> "商店 " + shop.id() + " 因方块破坏已移除");
             }
@@ -86,6 +91,7 @@ public class BlockListener implements Listener {
             Shelf shelf = shopManager.getShelfAt(world, x, y, z);
             if (shelf != null) {
                 shopManager.removeShelf(shelf.id());
+                shelfDisplayManager.removeDisplay(shelf.id());
             }
         }
     }
@@ -99,7 +105,7 @@ public class BlockListener implements Listener {
             return;
         }
         Block block = event.getClickedBlock();
-        if (block == null || !craftEngine.isReady()) {
+        if (block == null) {
             return;
         }
 
@@ -154,6 +160,7 @@ public class BlockListener implements Listener {
             return;
         }
         messages.send(player, "shop-created");
+        shopRangeVisualizer.showRange(player, shop);
     }
 
     private void handleShelfPlace(BlockPlaceEvent event, Block block) {

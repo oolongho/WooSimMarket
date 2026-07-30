@@ -174,9 +174,11 @@ public class MarketManager {
      * 从 items.yml 加载物品标准价表。
      */
     private void loadItems() {
-        plugin.saveResource("items.yml", false);
-        FileConfiguration itemsConfig = YamlConfiguration.loadConfiguration(
-                new File(plugin.getDataFolder(), "items.yml"));
+        File itemsFile = new File(plugin.getDataFolder(), "items.yml");
+        if (!itemsFile.exists()) {
+            plugin.saveResource("items.yml", false);
+        }
+        FileConfiguration itemsConfig = YamlConfiguration.loadConfiguration(itemsFile);
 
         ConfigurationSection itemsSection = itemsConfig.getConfigurationSection("items");
         if (itemsSection == null) {

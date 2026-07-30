@@ -151,7 +151,7 @@ public class ShopManager {
     public Shelf bindShelf(String shopId, String world, int x, int y, int z, String facing) {
         String id = UUID.randomUUID().toString();
         Shelf shelf = new Shelf(id, shopId, world, x, y, z, facing,
-                null, 0, 0, Shelf.DEFAULT_MAX_STOCK, true);
+                null, 0, 0, Shelf.DEFAULT_MAX_STOCK, false);
         if (!shelfDao.insert(shelf.toRecord())) {
             return null;
         }

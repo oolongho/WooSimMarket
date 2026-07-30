@@ -1,12 +1,4 @@
-# WooSimMarket English messages (MiniMessage format)
-# Placeholders {xxx} are replaced with literal values before sending; MiniMessage tags like <color:#xxxxxx> <bold> <gradient> are supported
-# {prefix} is auto-replaced with the prefix key value; command feedback messages should include {prefix} explicitly, GUI titles and passive notifications should not
-
-# Unified color scheme (7 colors)
-#   Error      #EF4444  Warning    #F59E0B  Success    #10B981
-#   Important  #3B82F6  Secondary  #9CA3AF  Special    #5EEAD4
-#   Tip/Info   #8B5CF6
-# Prefix uses Special color as Woo series brand color
+# WooSimMarket English Language File
 
 prefix: "<white>[</white><color:#5EEAD4>WooSimMarket</color><white>]</white> "
 
@@ -19,10 +11,14 @@ shop-limit-reached: "{prefix}<color:#EF4444>Shop limit reached, cannot create mo
 shop-too-close: "{prefix}<color:#EF4444>Too close to another cash register to create.</color>"
 shop-not-found: "{prefix}<color:#EF4444>Shop not found.</color>"
 
-shelf-bound: "{prefix}<color:#10B981>Shelf bound to shop.</color>"
+shelf-bound: "{prefix}<color:#10B981>Shelf bound to shop. Please open the shelf management UI to enable it.</color>"
 shelf-too-far: "{prefix}<color:#EF4444>Shelf is too far from the cash register to bind.</color>"
 shelf-not-found: "{prefix}<color:#EF4444>Shelf not found.</color>"
 shelf-disabled: "{prefix}<color:#F59E0B>This shelf is disabled.</color>"
+
+# Range visualization
+range-not-found: "{prefix}<color:#EF4444>No shop found nearby.</color>"
+range-showing: "{prefix}<color:#10B981>Showing shop range for {seconds} seconds.</color>"
 
 price-set: "{prefix}<color:#10B981>Price set to {price}.</color>"
 price-input-prompt: "{prefix}<color:#F59E0B>Please type a price in chat (type cancel to abort):</color>"

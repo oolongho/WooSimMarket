@@ -36,6 +36,12 @@ import java.util.function.Consumer;
  */
 public final class NpcPathfinder {
 
+    /** 寻路危险方块集合（isWalkable 拒绝踏入）。 */
+    private static final Set<Material> HAZARD_BLOCKS = Set.of(
+            Material.FIRE, Material.LAVA, Material.CACTUS, Material.MAGMA_BLOCK,
+            Material.POINTED_DRIPSTONE, Material.SWEET_BERRY_BUSH, Material.WITHER_ROSE,
+            Material.CAMPFIRE, Material.SOUL_CAMPFIRE);
+
     private NpcPathfinder() {
     }
 
@@ -55,6 +61,7 @@ public final class NpcPathfinder {
                                 int maxDistance, int maxIterations,
                                 Consumer<List<Location>> callback) {
         boolean debug = plugin.getConfigLoader().isDebug();
+        boolean avoidHazards = plugin.getConfigLoader().isPathfindingAvoidHazards();
 
         if (debug) {
             plugin.getLogger().info(() -> String.format(
@@ -75,7 +82,7 @@ public final class NpcPathfinder {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             List<Location> path;
             try {
-                path = computePath(snapshots, world, start, target, maxIterations);
+                path = computePath(snapshots, world, start, target, maxIterations, avoidHazards);
             } catch (Exception e) {
                 plugin.getLogger().warning("A* 寻路异常: " + e.getMessage());
                 path = null;
@@ -140,10 +147,12 @@ public final class NpcPathfinder {
      * @param start         起点位置
      * @param target        目标位置
      * @param maxIterations 最大迭代节点数
-     * @return 路径列表（不含起点，含终点）；无路径返回 {@code null}
+     * @param avoidHazards  是否规避危险方块
+     * @return 路径列表（不含起点，含终点，已平滑）；无路径返回 {@code null}
      */
     private static List<Location> computePath(Map<Long, ChunkSnapshot> snapshots, World world,
-                                              Location start, Location target, int maxIterations) {
+                                              Location start, Location target, int maxIterations,
+                                              boolean avoidHazards) {
         int startX = start.getBlockX();
         int startY = start.getBlockY();
         int startZ = start.getBlockZ();
@@ -184,13 +193,13 @@ public final class NpcPathfinder {
             if (Math.abs(current.x - targetX) <= 1
                     && Math.abs(current.y - targetY) <= 1
                     && Math.abs(current.z - targetZ) <= 1) {
-                return buildPath(current, world);
+                return smoothPath(buildPath(current, world), snapshots, start);
             }
 
             // 遍历 4 个水平方向邻居
             for (int[] dir : DIRECTIONS) {
                 expandNeighbor(snapshots, current, dir[0], dir[1],
-                        targetX, targetY, targetZ, open, closed, bestG);
+                        targetX, targetY, targetZ, open, closed, bestG, avoidHazards);
             }
         }
         return null;
@@ -202,43 +211,43 @@ public final class NpcPathfinder {
     };
 
     /**
-     * 扩展一个方向的邻居：按优先级尝试平走 → 上台阶 → 下台阶。
+     * 扩展一个方向的邻居：并列尝试平走 / 上台阶 / 下台阶，由 g 值择优。
      *
-     * <p>三种情况互斥（数学上不可能同时成立：平走要求脚位为空气，上台阶要求脚位为固体；
-     * 平走要求脚下方块为固体，下台阶要求脚下方块为空气），故按优先级取首个可行即可。</p>
+     * <p>三种情况并非互斥（如 2 格高空气柱时上台阶与下台阶均可行），
+     * 故全部尝试入队，重复节点由 closed / bestG 过滤。</p>
      *
-     * @param snapshots 区块快照
-     * @param current   当前节点
-     * @param dx        X 方向偏移
-     * @param dz        Z 方向偏移
-     * @param targetX   目标 X
-     * @param targetY   目标 Y
-     * @param targetZ   目标 Z
-     * @param open      开放集
-     * @param closed    关闭集
-     * @param bestG     已知最优 g 值映射
+     * @param snapshots    区块快照
+     * @param current      当前节点
+     * @param dx           X 方向偏移
+     * @param dz           Z 方向偏移
+     * @param targetX      目标 X
+     * @param targetY      目标 Y
+     * @param targetZ      目标 Z
+     * @param open         开放集
+     * @param closed       关闭集
+     * @param bestG        已知最优 g 值映射
+     * @param avoidHazards 是否规避危险方块
      */
     private static void expandNeighbor(Map<Long, ChunkSnapshot> snapshots, Node current,
                                        int dx, int dz,
                                        int targetX, int targetY, int targetZ,
-                                       PriorityQueue<Node> open, Set<Long> closed, Map<Long, Double> bestG) {
+                                       PriorityQueue<Node> open, Set<Long> closed, Map<Long, Double> bestG,
+                                       boolean avoidHazards) {
         int nx = current.x + dx;
         int nz = current.z + dz;
 
         // 1. 平走：(nx, y, nz) 可行走，代价 1.0
-        if (isWalkable(snapshots, nx, current.y, nz)) {
+        if (isWalkable(snapshots, nx, current.y, nz, avoidHazards)) {
             tryAddNode(nx, current.y, nz, current, 1.0,
                     targetX, targetY, targetZ, open, closed, bestG);
-            return;
         }
-        // 2. 上台阶：前方不可行走但前方+1格可行走，代价 1.5
-        if (isWalkable(snapshots, nx, current.y + 1, nz)) {
+        // 2. 上台阶：前方+1格可行走，代价 1.5
+        if (isWalkable(snapshots, nx, current.y + 1, nz, avoidHazards)) {
             tryAddNode(nx, current.y + 1, nz, current, 1.5,
                     targetX, targetY, targetZ, open, closed, bestG);
-            return;
         }
-        // 3. 下台阶：前方脚下无固体但前方-1格可行走，代价 1.0
-        if (isWalkable(snapshots, nx, current.y - 1, nz)) {
+        // 3. 下台阶：前方-1格可行走，代价 1.0
+        if (isWalkable(snapshots, nx, current.y - 1, nz, avoidHazards)) {
             tryAddNode(nx, current.y - 1, nz, current, 1.0,
                     targetX, targetY, targetZ, open, closed, bestG);
         }
@@ -306,6 +315,122 @@ public final class NpcPathfinder {
     }
 
     /**
+     * 路径平滑（string pulling）：从起点开始，对每个路径点找最远可直视的下游点，
+     * 跳过中间点，得到最短折线路径。O(n²) 最坏复杂度，n 为路径点数。
+     *
+     * <p>算法：以 anchor（起点或上一个保留点）为基准，从路径末端反向扫描第一个
+     * 有 LOS 的点 farthest，加入结果并设为新 anchor；从 farthest+1 继续迭代。
+     * 路径点本身保持不动，仅修改路径点列表（不修改起点）。</p>
+     *
+     * @param path      A* 返回的路径点列表（不含起点，含终点，方块中心坐标）
+     * @param snapshots 区块快照
+     * @param start     NPC 当前位置（方块坐标）
+     * @return 平滑后的路径点列表
+     */
+    private static List<Location> smoothPath(List<Location> path, Map<Long, ChunkSnapshot> snapshots, Location start) {
+        if (path.size() <= 1) {
+            return path;
+        }
+        List<Location> result = new ArrayList<>();
+        Location anchor = start;
+        int i = 0;
+        int n = path.size();
+        while (i < n) {
+            // 从最远端反向找第一个有 LOS 的点
+            int farthest = i;
+            for (int j = n - 1; j > i; j--) {
+                if (hasLineOfSight(snapshots, anchor, path.get(j))) {
+                    farthest = j;
+                    break;
+                }
+            }
+            result.add(path.get(farthest));
+            anchor = path.get(farthest);
+            i = farthest + 1;
+        }
+        return result;
+    }
+
+    /**
+     * 视线检查：用 Bresenham 3D 直线算法枚举 from 到 to 之间所有中间方块（不含端点），
+     * 任一中间方块的脚位或头位非空气则视为阻挡。仅读取 ChunkSnapshot（异步线程安全）。
+     *
+     * @param snapshots 区块快照
+     * @param from      起点（仅取方块坐标）
+     * @param to        目标点（仅取方块坐标）
+     * @return 无阻挡返回 true
+     */
+    private static boolean hasLineOfSight(Map<Long, ChunkSnapshot> snapshots, Location from, Location to) {
+        int x1 = from.getBlockX();
+        int y1 = from.getBlockY();
+        int z1 = from.getBlockZ();
+        int x2 = to.getBlockX();
+        int y2 = to.getBlockY();
+        int z2 = to.getBlockZ();
+
+        int dx = Math.abs(x2 - x1);
+        int dy = Math.abs(y2 - y1);
+        int dz = Math.abs(z2 - z1);
+        int xs = Integer.compare(x2, x1);
+        int ys = Integer.compare(y2, y1);
+        int zs = Integer.compare(z2, z1);
+
+        // 3D Bresenham：选 delta 最大的轴为驱动轴，另两轴按误差累积步进
+        if (dx >= dy && dx >= dz) {
+            // X 驱动
+            int y = y1, z = z1;
+            int errY = 2 * dy - dx;
+            int errZ = 2 * dz - dx;
+            for (int x = x1 + xs; x != x2; x += xs) {
+                if (errY > 0) { y += ys; errY -= 2 * dx; }
+                if (errZ > 0) { z += zs; errZ -= 2 * dx; }
+                errY += 2 * dy;
+                errZ += 2 * dz;
+                if (!isClearForPassage(snapshots, x, y, z)) {
+                    return false;
+                }
+            }
+        } else if (dy >= dx && dy >= dz) {
+            // Y 驱动
+            int x = x1, z = z1;
+            int errX = 2 * dx - dy;
+            int errZ = 2 * dz - dy;
+            for (int y = y1 + ys; y != y2; y += ys) {
+                if (errX > 0) { x += xs; errX -= 2 * dy; }
+                if (errZ > 0) { z += zs; errZ -= 2 * dy; }
+                errX += 2 * dx;
+                errZ += 2 * dz;
+                if (!isClearForPassage(snapshots, x, y, z)) {
+                    return false;
+                }
+            }
+        } else {
+            // Z 驱动
+            int x = x1, y = y1;
+            int errX = 2 * dx - dz;
+            int errY = 2 * dy - dz;
+            for (int z = z1 + zs; z != z2; z += zs) {
+                if (errX > 0) { x += xs; errX -= 2 * dz; }
+                if (errY > 0) { y += ys; errY -= 2 * dz; }
+                errX += 2 * dx;
+                errY += 2 * dy;
+                if (!isClearForPassage(snapshots, x, y, z)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 检查方块通道是否畅通：脚位与头位均为空气。
+     */
+    private static boolean isClearForPassage(Map<Long, ChunkSnapshot> snapshots, int x, int y, int z) {
+        return getBlockType(snapshots, x, y, z).isAir()
+                && getBlockType(snapshots, x, y + 1, z).isAir();
+    }
+
+    /**
      * 从 ChunkSnapshot 读取方块类型。未加载区块视为空气。
      *
      * @param snapshots 区块快照映射
@@ -331,19 +456,27 @@ public final class NpcPathfinder {
     }
 
     /**
-     * 可行走判定：脚下方块固体，脚位与头位均为空气。
+     * 可行走判定：脚下方块固体，脚位与头位均为空气；开启规避时拒绝危险方块。
      *
-     * @param snapshots 区块快照映射
-     * @param x         方块 X 坐标
-     * @param y         脚位 Y 坐标
-     * @param z         方块 Z 坐标
+     * @param snapshots    区块快照映射
+     * @param x            方块 X 坐标
+     * @param y            脚位 Y 坐标
+     * @param z            方块 Z 坐标
+     * @param avoidHazards 是否规避危险方块
      * @return 可行走返回 true
      */
-    private static boolean isWalkable(Map<Long, ChunkSnapshot> snapshots, int x, int y, int z) {
+    private static boolean isWalkable(Map<Long, ChunkSnapshot> snapshots, int x, int y, int z,
+                                      boolean avoidHazards) {
         Material below = getBlockType(snapshots, x, y - 1, z);
         Material feet = getBlockType(snapshots, x, y, z);
         Material head = getBlockType(snapshots, x, y + 1, z);
-        return below.isSolid() && feet.isAir() && head.isAir();
+        if (!(below.isSolid() && feet.isAir() && head.isAir())) {
+            return false;
+        }
+        if (avoidHazards && (HAZARD_BLOCKS.contains(below) || HAZARD_BLOCKS.contains(feet))) {
+            return false;
+        }
+        return true;
     }
 
     /**

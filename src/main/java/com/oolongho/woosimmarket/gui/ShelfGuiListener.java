@@ -5,6 +5,7 @@ import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -36,13 +37,16 @@ public class ShelfGuiListener implements Listener {
     private final ShopManager shopManager;
     private final PricingManager pricingManager;
     private final Messages messages;
+    private final ShelfDisplayManager shelfDisplayManager;
 
     public ShelfGuiListener(WooSimMarket plugin, ShopManager shopManager,
-                            PricingManager pricingManager, Messages messages) {
+                            PricingManager pricingManager, Messages messages,
+                            ShelfDisplayManager shelfDisplayManager) {
         this.plugin = plugin;
         this.shopManager = shopManager;
         this.pricingManager = pricingManager;
         this.messages = messages;
+        this.shelfDisplayManager = shelfDisplayManager;
     }
 
     /**
@@ -133,6 +137,7 @@ public class ShelfGuiListener implements Listener {
             shelf.stock(item.getAmount());
         }
         shopManager.saveShelf(shelf);
+        shelfDisplayManager.refreshShelf(shelf);
     }
 
     // ===== 内部处理 =====
@@ -159,5 +164,6 @@ public class ShelfGuiListener implements Listener {
         shelf.enabled(!shelf.enabled());
         shopManager.saveShelf(shelf);
         gui.refresh(messages);
+        shelfDisplayManager.refreshShelf(shelf);
     }
 }

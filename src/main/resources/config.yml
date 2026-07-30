@@ -1,5 +1,4 @@
 # WooSimMarket 配置文件
-# 完整参数说明见 .trae/specs/init-woosimmarket/spec.md
 
 settings:
   # 调试模式：开启后输出详细日志（NPC 生成、购买判定、市场调价等）
@@ -14,6 +13,11 @@ shop:
   limit: 1
   # 两个收银机之间的最小距离（方块），防止商店互相覆盖
   min-distance: 8
+  # 收银台方块 ID（含 : 为 CraftEngine 自定义方块 namespace:path；不含 : 为原版 Material 名）
+  # 配置无效时兜底为 EMERALD_BLOCK
+  cash-register-block: simmarket:cash_register
+  # 货架方块 ID（格式同上，兜底为 CHISELED_BOOKSHELF）
+  shelf-block: simmarket:shelf
 
 npc:
   # NPC 刷新间隔区间（秒），实际间隔在 [min, max] 内随机
@@ -34,6 +38,46 @@ npc:
   pathfinding-max-distance: 32
   # A*寻路最大迭代节点数（防止过度计算）
   pathfinding-max-iterations: 5000
+  # NPC 皮肤外层显示位掩码（0xFF=全部显示，0x40=仅帽子，0x00=全关）
+  # 位定义：0x01 Cape | 0x02 Jacket | 0x04 LSleeve | 0x08 RSleeve | 0x10 LPants | 0x20 RPants | 0x40 Hat
+  skin-parts: 255
+  # 寻路是否规避危险方块（火/岩浆/仙人掌/岩浆块/垂石笋/甜浆果丛/凋灵玫瑰/营火/灵魂营火）
+  pathfinding-avoid-hazards: true
+  # NPC 随机装备（spawn 时一次性发送，无运行时开销；头盔始终为空保留头部皮肤）
+  equipment:
+    enabled: true
+    # 胸甲池（皮革装备会随机染色）
+    chestplate:
+      - LEATHER_CHESTPLATE
+      - CHAINMAIL_CHESTPLATE
+      - IRON_CHESTPLATE
+    # 护腿池
+    leggings:
+      - LEATHER_LEGGINGS
+      - CHAINMAIL_LEGGINGS
+    # 靴子池
+    boots:
+      - LEATHER_BOOTS
+      - CHAINMAIL_BOOTS
+    # 主手装饰物池（AIR=空手）
+    main-hand:
+      - AIR
+      - POPPY
+      - CORNFLOWER
+      - BOOK
+      - STICK
+      - TORCH
+      - PAPER
+    # 皮革染色颜色池（十六进制，应用于皮革材质装备）
+    leather-colors:
+      - "#FF4040"
+      - "#40FF40"
+      - "#4040FF"
+      - "#FFFF40"
+      - "#FF40FF"
+      - "#40FFFF"
+      - "#FFA040"
+      - "#A040FF"
 
 market:
   # 购买概率敏感度：P = (Base / UserPrice) ^ sensitivity × global-multiplier
@@ -52,15 +96,28 @@ market:
 skin:
   # NPC 皮肤来源玩家名列表（Ashcon API 按名获取 skin）
   names:
-    - Notch
     - oolongho
+    - Notch
+    - jeb_
+    - Alex
+    - Steve
+    - Him
   # 皮肤缓存文件（落盘到 plugins/WooSimMarket/<file>）
   cache-file: skins.json
   # 异步获取皮肤的超时时间（秒）
   fetch-timeout-seconds: 10
   # 获取失败时的兜底皮肤（STEVE / ALEX）
-  fallback: oolongho
+  fallback: Steve
 
 database:
   # SQLite 数据库文件名（位于 plugins/WooSimMarket/ 下）
   file: woosimmarket.db
+
+visualization:
+  # 货架方块上方全息展示（启用且有物品的货架显示物品图标+库存）
+  shelf-display:
+    enabled: true
+    # 物品图标 Y 偏移（相对货架方块底面，1.0 = 方块顶部）
+    item-offset-y: 1.2
+  # 商店范围粒子圆环持续秒数（创建时与 /wsm range 均生效）
+  range-duration-seconds: 10

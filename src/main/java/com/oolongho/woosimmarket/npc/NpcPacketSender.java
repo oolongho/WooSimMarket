@@ -5,17 +5,26 @@ import com.google.common.collect.Multimap;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
+import com.mojang.datafixers.util.Pair;
+import com.oolongho.woosimmarket.config.ConfigLoader;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Avatar;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.level.GameType;
@@ -23,8 +32,10 @@ import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.entity.Player;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -44,6 +55,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ol>
  *   <li>{@link ClientboundPlayerInfoUpdatePacket}（ADD_PLAYER）— 添加到 TAB 列表</li>
  *   <li>{@link ClientboundAddEntityPacket} — 生成玩家实体（26.1+ 替代已移除的 ClientboundAddPlayerPacket）</li>
+ *   <li>{@link ClientboundSetEntityDataPacket} — 设置 skin 外层 metadata（DATA_PLAYER_MODE_CUSTOMISATION）</li>
  *   <li>{@link ClientboundPlayerInfoUpdatePacket#updateListed} — 从 TAB 列表隐藏</li>
  *   <li>{@link ClientboundRotateHeadPacket} — 头部朝向与 body yaw 一致</li>
  * </ol></p>
@@ -73,7 +85,15 @@ public class NpcPacketSender {
     /** NPC entityId → 上次发送的 head yaw（用于判断是否需要更新头部朝向）。 */
     private final Map<Integer, Float> lastHeadYaws = new ConcurrentHashMap<>();
 
-    public NpcPacketSender() {
+    /** 配置加载器，用于读取 skin-parts 位掩码。 */
+    private final ConfigLoader configLoader;
+
+    /** DATA_PLAYER_MODE_CUSTOMISATION 的 entity data id（构造时反射读取，失败为 -1 降级）。 */
+    private final int playerModeCustomisationId;
+
+    public NpcPacketSender(ConfigLoader configLoader) {
+        this.configLoader = configLoader;
+        this.playerModeCustomisationId = resolvePlayerModeCustomisationId();
     }
 
     /**
@@ -97,10 +117,20 @@ public class NpcPacketSender {
                 EntityType.PLAYER, 0,
                 Vec3.ZERO, 0.0));
 
-        // 3. 从 TAB 列表隐藏
+        // 3. 设置 skin 外层 metadata（反射失败时跳过，降级为无外层，NPC 仍可正常工作）
+        if (playerModeCustomisationId >= 0) {
+            sendPacket(player, createSkinPartsPacket(npc.entityId(), configLoader.getNpcSkinParts()));
+        }
+
+        // 3.5 发送随机装备（4 部位，头盔始终为空保留头部皮肤；全空时跳过）
+        if (!npc.equipment().isEmpty()) {
+            sendPacket(player, createEquipmentPacket(npc.entityId(), npc.equipment()));
+        }
+
+        // 4. 从 TAB 列表隐藏
         sendPacket(player, ClientboundPlayerInfoUpdatePacket.updateListed(npc.uuid(), false));
 
-        // 4. 设置头部朝向与身体一致（spawn 时强制发送一次，避免客户端头部朝默认方向）
+        // 5. 设置头部朝向与身体一致（spawn 时强制发送一次，避免客户端头部朝默认方向）
         //    注意：不更新 lastHeadYaws —— 该共享状态由 moveToNearby 的广播统一管理，
         //    此处更新会抑制同 tick 内其他已追踪玩家的头部旋转广播
         sendPacket(player, createHeadRotatePacket(npc.entityId(), loc.getYaw()));
@@ -295,6 +325,69 @@ public class NpcPacketSender {
                 loc.getYaw(),
                 loc.getPitch());
         return new ClientboundTeleportEntityPacket(npc.entityId(), pmr, Set.of(), false);
+    }
+
+    /**
+     * 构造 skin 外层 metadata 包，设置 {@code DATA_PLAYER_MODE_CUSTOMISATION} 为指定位掩码。
+     *
+     * <p>位定义（与 Mojang 一致）：0x01 Cape | 0x02 Jacket | 0x04 LSleeve | 0x08 RSleeve |
+     * 0x10 LPants | 0x20 RPants | 0x40 Hat；0xFF 全开。发包 NPC 无真实实体，直接构造
+     * {@link SynchedEntityData.DataValue} 并装入 {@link ClientboundSetEntityDataPacket}。</p>
+     *
+     * @param entityId  NPC entityId
+     * @param skinParts skin 外层位掩码
+     * @return metadata 包
+     */
+    private ClientboundSetEntityDataPacket createSkinPartsPacket(int entityId, int skinParts) {
+        SynchedEntityData.DataValue<?> dataValue = new SynchedEntityData.DataValue<>(
+                playerModeCustomisationId, EntityDataSerializers.BYTE, (byte) skinParts);
+        return new ClientboundSetEntityDataPacket(entityId, List.of(dataValue));
+    }
+
+    /**
+     * 构造装备包，发送 NPC 的 4 部位装备（胸甲/护腿/靴子/主手）。
+     *
+     * <p>头盔始终不发送（保留头部皮肤显示）。null 部位不加入列表（客户端保持空）。
+     * Bukkit ItemStack 通过 {@link CraftItemStack#asNMSCopy} 转为 NMS ItemStack。</p>
+     *
+     * @param entityId  NPC entityId
+     * @param equipment 装备对象
+     * @return 装备包
+     */
+    private ClientboundSetEquipmentPacket createEquipmentPacket(int entityId, SimNpc.Equipment equipment) {
+        List<Pair<EquipmentSlot, net.minecraft.world.item.ItemStack>> list = new ArrayList<>();
+        if (equipment.chestplate() != null) {
+            list.add(Pair.of(EquipmentSlot.CHEST, CraftItemStack.asNMSCopy(equipment.chestplate())));
+        }
+        if (equipment.leggings() != null) {
+            list.add(Pair.of(EquipmentSlot.LEGS, CraftItemStack.asNMSCopy(equipment.leggings())));
+        }
+        if (equipment.boots() != null) {
+            list.add(Pair.of(EquipmentSlot.FEET, CraftItemStack.asNMSCopy(equipment.boots())));
+        }
+        if (equipment.mainHand() != null) {
+            list.add(Pair.of(EquipmentSlot.MAINHAND, CraftItemStack.asNMSCopy(equipment.mainHand())));
+        }
+        return new ClientboundSetEquipmentPacket(entityId, list);
+    }
+
+    /**
+     * 反射读取 {@link Avatar#DATA_PLAYER_MODE_CUSTOMISATION} 的内部 id。
+     *
+     * <p>accessor 本身在 Paper 26.1+ 经 {@code paper.at} 已 public，但其 {@code id} 字段为
+     * 包级私有，需反射访问。构造时执行一次，失败返回 -1（降级：禁用 skin 外层），
+     * NPC 仍可正常工作，仅缺少帽/外套显示。</p>
+     *
+     * @return entity data id；反射失败返回 -1
+     */
+    private static int resolvePlayerModeCustomisationId() {
+        try {
+            Field idField = EntityDataAccessor.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            return idField.getInt(Avatar.DATA_PLAYER_MODE_CUSTOMISATION);
+        } catch (ReflectiveOperationException e) {
+            return -1;
+        }
     }
 
     /**

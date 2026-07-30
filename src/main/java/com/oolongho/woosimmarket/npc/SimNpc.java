@@ -3,6 +3,7 @@ package com.oolongho.woosimmarket.npc;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.Collections;
 import java.util.List;
@@ -51,6 +52,18 @@ public class SimNpc {
     /** NPC 皮肤数据（Ashcon textures value + signature）。 */
     public record SkinData(String value, String signature) {}
 
+    /** NPC 装备（4 部位，可为 null 表示不穿戴；头盔始终为空保留头部皮肤）。 */
+    public record Equipment(ItemStack chestplate, ItemStack leggings,
+                             ItemStack boots, ItemStack mainHand) {
+        /** 全空装备（equipment 禁用时使用）。 */
+        public static final Equipment EMPTY = new Equipment(null, null, null, null);
+
+        /** 是否所有部位都为空。 */
+        public boolean isEmpty() {
+            return chestplate == null && leggings == null && boots == null && mainHand == null;
+        }
+    }
+
     /** tick 结果。 */
     public enum TickResult {
         /** 正常移动了一步 */
@@ -80,6 +93,7 @@ public class SimNpc {
     private final int entityId;
     private final String name;
     private final SkinData skin;
+    private final Equipment equipment;
     private final String shopId;
     private final String shelfId;
     private final long spawnTime;
@@ -98,7 +112,7 @@ public class SimNpc {
     private final int stuckThresholdSeconds;
     private final double stuckThresholdDistance;
 
-    public SimNpc(UUID uuid, String name, SkinData skin, String shopId, String shelfId,
+    public SimNpc(UUID uuid, String name, SkinData skin, Equipment equipment, String shopId, String shelfId,
                   Location spawnLocation,
                   double speed, double reachDistance,
                   int stuckThresholdSeconds, double stuckThresholdDistance) {
@@ -106,6 +120,7 @@ public class SimNpc {
         this.entityId = ENTITY_ID_COUNTER.incrementAndGet();
         this.name = name;
         this.skin = skin;
+        this.equipment = equipment;
         this.shopId = shopId;
         this.shelfId = shelfId;
         this.spawnTime = System.currentTimeMillis();
@@ -280,6 +295,10 @@ public class SimNpc {
 
     public SkinData skin() {
         return skin;
+    }
+
+    public Equipment equipment() {
+        return equipment;
     }
 
     public String shopId() {

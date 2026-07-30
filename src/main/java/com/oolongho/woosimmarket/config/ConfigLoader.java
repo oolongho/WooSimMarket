@@ -38,6 +38,8 @@ public class ConfigLoader {
     private double npcStuckThresholdDistance;
     private double npcDespawnDistance;
     private double npcTargetReachDistance;
+    private int npcSkinParts;
+    private boolean pathfindingAvoidHazards;
 
     // market
     private double marketSensitivity;
@@ -92,6 +94,9 @@ public class ConfigLoader {
         npcStuckThresholdDistance = Math.max(0.1, config.getDouble("npc.stuck-threshold-distance", 5.0));
         npcDespawnDistance = Math.max(1.0, config.getDouble("npc.despawn-distance", 32.0));
         npcTargetReachDistance = Math.max(0.1, config.getDouble("npc.target-reach-distance", 1.5));
+        // YAML 不支持 0xFF 字面量，配置文件用十进制 255；此处 0xFF 仅作 getInt 默认值
+        npcSkinParts = config.getInt("npc.skin-parts", 0xFF);
+        pathfindingAvoidHazards = config.getBoolean("npc.pathfinding-avoid-hazards", true);
 
         // market
         marketSensitivity = Math.max(0.1, config.getDouble("market.sensitivity", 2.0));
@@ -147,6 +152,24 @@ public class ConfigLoader {
         return shopMinDistance;
     }
 
+    /**
+     * 收银台方块 ID（CraftEngine 格式 namespace:path，或原版 Material 名）。
+     *
+     * @return 方块 ID 字符串
+     */
+    public String getCashRegisterBlock() {
+        return config.getString("shop.cash-register-block", "simmarket:cash_register");
+    }
+
+    /**
+     * 货架方块 ID（CraftEngine 格式 namespace:path，或原版 Material 名）。
+     *
+     * @return 方块 ID 字符串
+     */
+    public String getShelfBlock() {
+        return config.getString("shop.shelf-block", "simmarket:shelf");
+    }
+
     public int getNpcSpawnIntervalMin() {
         return npcSpawnIntervalMin;
     }
@@ -173,6 +196,54 @@ public class ConfigLoader {
 
     public double getNpcTargetReachDistance() {
         return npcTargetReachDistance;
+    }
+
+    /** NPC 皮肤外层显示位掩码（0x01 Cape | 0x02 Jacket | 0x04 LSleeve | 0x08 RSleeve | 0x10 LPants | 0x20 RPants | 0x40 Hat）。 */
+    public int getNpcSkinParts() {
+        return npcSkinParts;
+    }
+
+    /** 寻路是否规避危险方块（火/岩浆/仙人掌等）。 */
+    public boolean isPathfindingAvoidHazards() {
+        return pathfindingAvoidHazards;
+    }
+
+    /** NPC 随机装备是否启用。 */
+    public boolean isNpcEquipmentEnabled() {
+        return config.getBoolean("npc.equipment.enabled", true);
+    }
+
+    /** 胸甲装备池（Material 名列表）。 */
+    public List<String> getEquipmentChestplate() {
+        return config.getStringList("npc.equipment.chestplate");
+    }
+
+    /** 护腿装备池（Material 名列表）。 */
+    public List<String> getEquipmentLeggings() {
+        return config.getStringList("npc.equipment.leggings");
+    }
+
+    /** 靴子装备池（Material 名列表）。 */
+    public List<String> getEquipmentBoots() {
+        return config.getStringList("npc.equipment.boots");
+    }
+
+    /** 主手装饰物池（Material 名列表，AIR=空手）。 */
+    public List<String> getEquipmentMainHand() {
+        return config.getStringList("npc.equipment.main-hand");
+    }
+
+    /** 皮革染色颜色池（解析十六进制字符串为 Bukkit Color）。 */
+    public List<org.bukkit.Color> getLeatherColors() {
+        List<org.bukkit.Color> colors = new ArrayList<>();
+        for (String hex : config.getStringList("npc.equipment.leather-colors")) {
+            try {
+                colors.add(org.bukkit.Color.fromRGB(Integer.parseInt(hex.replace("#", ""), 16)));
+            } catch (Exception ignored) {
+                // 无效颜色跳过
+            }
+        }
+        return colors;
     }
 
     public double getMarketSensitivity() {
@@ -236,5 +307,32 @@ public class ConfigLoader {
     /** A* 寻路最大迭代节点数。 */
     public int getNpcPathfindingMaxIterations() {
         return config.getInt("npc.pathfinding-max-iterations", 5000);
+    }
+
+    /**
+     * 货架方块上方全息展示是否启用。
+     *
+     * @return 启用返回 true
+     */
+    public boolean isShelfDisplayEnabled() {
+        return config.getBoolean("visualization.shelf-display.enabled", true);
+    }
+
+    /**
+     * 货架物品图标 Y 偏移（相对货架方块底面）。
+     *
+     * @return Y 偏移
+     */
+    public double getShelfDisplayItemOffsetY() {
+        return config.getDouble("visualization.shelf-display.item-offset-y", 1.2);
+    }
+
+    /**
+     * 商店范围粒子圆环持续秒数。
+     *
+     * @return 持续秒数
+     */
+    public int getRangeDurationSeconds() {
+        return config.getInt("visualization.range-duration-seconds", 10);
     }
 }

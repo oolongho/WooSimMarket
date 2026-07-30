@@ -8,6 +8,7 @@ import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.util.TaskUtil;
+import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -51,6 +52,8 @@ public class NpcManager {
     private final Messages messages;
     private final NpcSkinCache skinCache;
     private final MarketManager marketManager;
+    private final ShelfDisplayManager shelfDisplayManager;
+    private final EquipmentProvider equipmentProvider;
 
     private final Map<UUID, SimNpc> npcsById = new ConcurrentHashMap<>();
     private final Map<String, List<UUID>> npcsByShop = new ConcurrentHashMap<>();
@@ -61,7 +64,7 @@ public class NpcManager {
     public NpcManager(WooSimMarket plugin, ShopManager shopManager,
                       NpcPacketSender packetSender, ConfigLoader configLoader,
                       Messages messages, NpcSkinCache skinCache,
-                      MarketManager marketManager) {
+                      MarketManager marketManager, ShelfDisplayManager shelfDisplayManager) {
         this.plugin = plugin;
         this.shopManager = shopManager;
         this.packetSender = packetSender;
@@ -69,6 +72,8 @@ public class NpcManager {
         this.messages = messages;
         this.skinCache = skinCache;
         this.marketManager = marketManager;
+        this.shelfDisplayManager = shelfDisplayManager;
+        this.equipmentProvider = new EquipmentProvider(configLoader);
     }
 
     /**
@@ -179,6 +184,9 @@ public class NpcManager {
         // 持久化货架
         shopManager.saveShelf(shelf);
 
+        // 刷新货架展示（基于最新库存数据）
+        shelfDisplayManager.refreshShelf(shelf);
+
         // 记录市场购买（动态调价依据）
         marketManager.recordPurchase(itemId);
 
@@ -287,7 +295,7 @@ public class NpcManager {
         String name = pickName();
         SimNpc.SkinData skin = skinCache.getSkin(name);
         SimNpc npc = new SimNpc(
-                UUID.randomUUID(), name, skin,
+                UUID.randomUUID(), name, skin, equipmentProvider.random(),
                 shop.id(), target.id(),
                 spawnLoc,
                 configLoader.getNpcSpeed(),

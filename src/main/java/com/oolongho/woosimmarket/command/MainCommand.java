@@ -39,6 +39,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
         register("info", new InfoCommand(plugin, messages));
         register("list", new ListCommand(plugin, messages));
         register("give", new GiveCommand(plugin, messages));
+        register("range", new RangeCommand(plugin, messages));
         register("help", new HelpCommand(plugin, messages));
     }
 

@@ -1,6 +1,7 @@
 package com.oolongho.woosimmarket.hook;
 
 import com.oolongho.woosimmarket.WooSimMarket;
+import com.oolongho.woosimmarket.config.ConfigLoader;
 import net.momirealms.craftengine.bukkit.api.CraftEngineBlocks;
 import net.momirealms.craftengine.bukkit.api.CraftEngineItems;
 import net.momirealms.craftengine.bukkit.item.BukkitItemDefinition;
@@ -9,6 +10,7 @@ import net.momirealms.craftengine.core.block.ImmutableBlockState;
 import net.momirealms.craftengine.core.registry.Holder;
 import net.momirealms.craftengine.core.util.Key;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -16,33 +18,80 @@ import org.jetbrains.annotations.Nullable;
 /**
  * CraftEngine 方块钩子
  *
- * <p>负责检测 CraftEngine 是否在线，并提供对自定义方块的识别能力。
- * 收银机方块 Key 为 {@code simmarket:cash_register}，货架方块 Key 为 {@code simmarket:shelf}。
- * 关键 Key 对象在构造时缓存，避免每次比对重复创建。</p>
+ * <p>负责检测 CraftEngine 是否在线，并提供对收银台/货架方块的识别能力。
+ * 方块 ID 由 {@link ConfigLoader} 配置驱动，支持两种格式：
+ * <ul>
+ *   <li>含 {@code :} → CraftEngine 自定义方块（namespace:path），需 CraftEngine 在线</li>
+ *   <li>不含 {@code :} → 原版 {@link Material} 名，无需 CraftEngine</li>
+ * </ul>
+ * 配置解析失败时兜底为原版 {@link Material#EMERALD_BLOCK}（收银台）/
+ * {@link Material#CHISELED_BOOKSHELF}（货架），确保插件基本可用。</p>
  *
  * @author oolongho
  */
 public class CraftEngineHook {
 
     private static final String CE_PLUGIN_NAME = "CraftEngine";
-    private static final String NAMESPACE = "simmarket";
-    private static final String CASH_REGISTER_PATH = "cash_register";
-    private static final String SHELF_PATH = "shelf";
+    /** 收银台兜底方块（配置无效时）。 */
+    private static final Material FALLBACK_CASH_REGISTER = Material.EMERALD_BLOCK;
+    /** 货架兜底方块（配置无效时）。 */
+    private static final Material FALLBACK_SHELF = Material.CHISELED_BOOKSHELF;
 
     private final WooSimMarket plugin;
+    /** 收银台方块标识：CraftEngine Key 或 null（原版 Material 模式）。 */
     private final Key cashRegisterKey;
+    /** 货架方块标识：CraftEngine Key 或 null（原版 Material 模式）。 */
     private final Key shelfKey;
+    /** 收银台原版 Material（CraftEngine 模式下为 null）。 */
+    private final Material cashRegisterMaterial;
+    /** 货架原版 Material（CraftEngine 模式下为 null）。 */
+    private final Material shelfMaterial;
     private volatile boolean ready = false;
 
     /**
-     * 构造钩子，预构造关键 Key 用于后续比对。
+     * 构造钩子，从配置解析收银台/货架方块标识。
      *
-     * @param plugin 插件实例
+     * @param plugin       插件实例
+     * @param configLoader 配置加载器
      */
-    public CraftEngineHook(WooSimMarket plugin) {
+    public CraftEngineHook(WooSimMarket plugin, ConfigLoader configLoader) {
         this.plugin = plugin;
-        this.cashRegisterKey = Key.of(NAMESPACE, CASH_REGISTER_PATH);
-        this.shelfKey = Key.of(NAMESPACE, SHELF_PATH);
+        String cashRegisterId = configLoader.getCashRegisterBlock();
+        String shelfId = configLoader.getShelfBlock();
+
+        Key parsedCashKey = null;
+        Material parsedCashMaterial = null;
+        Key parsedShelfKey = null;
+        Material parsedShelfMaterial = null;
+
+        try {
+            if (cashRegisterId.contains(":")) {
+                parsedCashKey = Key.of(cashRegisterId);
+            } else {
+                parsedCashMaterial = Material.valueOf(cashRegisterId.toUpperCase());
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning(() -> "收银台方块配置无效：" + cashRegisterId
+                    + "，兜底为 " + FALLBACK_CASH_REGISTER.name());
+            parsedCashMaterial = FALLBACK_CASH_REGISTER;
+        }
+
+        try {
+            if (shelfId.contains(":")) {
+                parsedShelfKey = Key.of(shelfId);
+            } else {
+                parsedShelfMaterial = Material.valueOf(shelfId.toUpperCase());
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning(() -> "货架方块配置无效：" + shelfId
+                    + "，兜底为 " + FALLBACK_SHELF.name());
+            parsedShelfMaterial = FALLBACK_SHELF;
+        }
+
+        this.cashRegisterKey = parsedCashKey;
+        this.cashRegisterMaterial = parsedCashMaterial;
+        this.shelfKey = parsedShelfKey;
+        this.shelfMaterial = parsedShelfMaterial;
     }
 
     /**
@@ -57,7 +106,12 @@ public class CraftEngineHook {
             return true;
         }
         ready = false;
-        plugin.getLogger().severe(() -> "未找到 CraftEngine！WooSimMarket 自定义方块识别将不可用（收银机/货架无法工作）");
+        if (cashRegisterKey != null || shelfKey != null) {
+            plugin.getLogger().warning(() -> "未找到 CraftEngine！配置的 CraftEngine 自定义方块将不可用，"
+                    + "原版方块配置仍可工作");
+        } else {
+            plugin.getLogger().info(() -> "未找到 CraftEngine，使用原版方块模式");
+        }
         return false;
     }
 
@@ -71,23 +125,33 @@ public class CraftEngineHook {
     }
 
     /**
-     * 判断方块是否为收银机（{@code simmarket:cash_register}）。
+     * 判断方块是否为收银台。
+     *
+     * <p>CraftEngine Key 模式需 CraftEngine ready；原版 Material 模式不需。</p>
      *
      * @param block 方块
-     * @return 是收银机返回 true
+     * @return 是收银台返回 true
      */
     public boolean isCashRegister(Block block) {
-        return isBlockOfType(block, cashRegisterKey);
+        if (cashRegisterKey != null) {
+            return isBlockOfType(block, cashRegisterKey);
+        }
+        return block != null && block.getType() == cashRegisterMaterial;
     }
 
     /**
-     * 判断方块是否为货架（{@code simmarket:shelf}）。
+     * 判断方块是否为货架。
+     *
+     * <p>CraftEngine Key 模式需 CraftEngine ready；原版 Material 模式不需。</p>
      *
      * @param block 方块
      * @return 是货架返回 true
      */
     public boolean isShelf(Block block) {
-        return isBlockOfType(block, shelfKey);
+        if (shelfKey != null) {
+            return isBlockOfType(block, shelfKey);
+        }
+        return block != null && block.getType() == shelfMaterial;
     }
 
     /**
@@ -153,27 +217,36 @@ public class CraftEngineHook {
     }
 
     /**
-     * 创建指定方块类型的物品形式（用于 /wsm give 命令）。
+     * 创建收银台或货架方块的物品形式（用于 /wsm give 命令）。
      *
-     * <p>路径：通过方块 Key 获取 {@link BlockDefinition} →
-     * {@code defaultState().settings().itemId()} 获取关联物品 Key →
-     * {@link CraftEngineItems#byId(Key)} 获取 {@link BukkitItemDefinition} →
-     * {@code buildBukkitItem()} 构建 {@link ItemStack}。</p>
+     * <p>CraftEngine Key 模式：通过方块 Key 获取 {@link BlockDefinition} → 关联物品 Key →
+     * {@link BukkitItemDefinition} 构建 {@link ItemStack}。
+     * 原版 Material 模式：直接 {@code new ItemStack(material)}。</p>
      *
      * @param blockType 方块类型名（cash_register 或 shelf）
      * @return 物品；不可用或获取失败返回 null
      */
     @Nullable
     public ItemStack createBlockItemStack(String blockType) {
-        if (!ready || blockType == null) {
+        if (blockType == null) {
             return null;
         }
-        Key blockKey = switch (blockType.toLowerCase()) {
-            case CASH_REGISTER_PATH -> cashRegisterKey;
-            case SHELF_PATH -> shelfKey;
-            default -> null;
-        };
+        boolean isCashRegister = "cash_register".equalsIgnoreCase(blockType);
+        boolean isShelf = "shelf".equalsIgnoreCase(blockType);
+        if (!isCashRegister && !isShelf) {
+            return null;
+        }
+
+        Key blockKey = isCashRegister ? cashRegisterKey : shelfKey;
+        Material material = isCashRegister ? cashRegisterMaterial : shelfMaterial;
+
+        // 原版 Material 模式
         if (blockKey == null) {
+            return material == null ? null : new ItemStack(material);
+        }
+
+        // CraftEngine Key 模式
+        if (!ready) {
             return null;
         }
         BlockDefinition definition = CraftEngineBlocks.byId(blockKey);
