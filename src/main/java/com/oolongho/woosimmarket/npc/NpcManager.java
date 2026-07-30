@@ -217,7 +217,7 @@ public class NpcManager {
             return 0;
         }
         double basePrice = marketManager.getFinalBase(itemId);
-        double sensitivity = configLoader.getMarketSensitivity();
+        double sensitivity = marketManager.getItemPriceSensitivity(itemId);
         double globalMult = configLoader.getMarketGlobalMultiplier();
 
         double ratio = basePrice / userPrice;

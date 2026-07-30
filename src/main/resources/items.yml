@@ -2,13 +2,21 @@
 # 每个条目定义物品的标准价格与目标销量：
 #   standard-price: NPC 购买判定的基准价（BasePrice）
 #   target-volume:  6 小时滑动窗口内的目标销量，实际销量低于目标则涨价，高于则降价
+#
+# 【可选 per-item 覆盖】（缺省用 market.yml 全局值）
+#   price-sensitivity:  价格敏感度（P 公式指数，<全局值 表示提价影响更小，适合稀有物）
+#   market-sensitivity: 市场敏感度（BasePrice 公式指数，<全局值 表示供需影响更小，适合稀有物）
+#
 # 物品名使用 Material 枚举名（如 DIAMOND, IRON_INGOT）
-# 由 MarketManager 加载（Task 10）
+# 由 MarketManager 加载
 
 items:
   DIAMOND:
     standard-price: 100.0
     target-volume: 50
+    # 稀有物品：价格/市场敏感度低于全局（提价与供需影响更小）
+    price-sensitivity: 1.5
+    market-sensitivity: 0.6
   IRON_INGOT:
     standard-price: 10.0
     target-volume: 200
@@ -18,3 +26,6 @@ items:
   GOLDEN_APPLE:
     standard-price: 200.0
     target-volume: 20
+    # 稀有物品：价格/市场敏感度低于全局
+    price-sensitivity: 1.2
+    market-sensitivity: 0.5

@@ -1,0 +1,46 @@
+# ===== WooSimMarket 市场经济配置 =====
+#
+# 本文件控制 NPC 购买概率与市场基准价的计算参数。
+# 物品级覆盖见 items.yml（per-item price-sensitivity / market-sensitivity）。
+#
+# 【购买概率公式】
+#   P = (BasePrice / UserPrice) ^ sensitivity × global-multiplier
+#
+#   - BasePrice：市场基准价（受供需影响，见下公式）
+#   - UserPrice：玩家设定的售价
+#   - sensitivity：价格敏感度（>1 时玩家提价显著降低购买概率；
+#     <1 时提价影响减弱。稀有物品建议在 items.yml 降低此值）
+#   - global-multiplier：全局热度倍率（整体购买意愿缩放）
+#
+# 【市场基准价公式】
+#   BasePrice = StandardPrice × Multiplier ^ exponent
+#
+#   - StandardPrice：物品标准价（items.yml 配置）
+#   - Multiplier：供需倍率 = targetVolume / recentPurchases
+#     （实际销量低于目标 → Multiplier > 1 → 涨价鼓励购买；
+#      实际销量高于目标 → Multiplier < 1 → 降价抑制购买）
+#   - exponent：市场敏感度（<1 时供需影响被压缩；
+#     >1 时供需影响被放大。稀有物品建议在 items.yml 降低此值）
+#   - Multiplier 钳制在 [multiplier-min, multiplier-max] 区间
+#
+# 【时间桶机制】
+#   滑动窗口 = bucket-count × bucket-minutes 分钟
+#   默认 72 × 5 = 360 分钟 = 6 小时
+#   每 bucket-minutes 分钟滚动一个桶，旧桶清空
+#   recentPurchases = 所有桶内该物品购买次数之和
+
+market:
+  # 价格敏感度（P 公式指数，>1 提价显著降概率）
+  sensitivity: 2.0
+  # 供需倍率下限（防止价格暴跌）
+  multiplier-min: 0.1
+  # 供需倍率上限（防止价格暴涨）
+  multiplier-max: 5.0
+  # 市场敏感度（BasePrice 公式指数，<1 压缩供需影响）
+  multiplier-exponent: 0.8
+  # 时间桶数量（滑动窗口 = count × minutes 分钟）
+  bucket-count: 72
+  # 每桶时长（分钟）
+  bucket-minutes: 5
+  # 全局热度倍率（整体购买意愿缩放，>1 更活跃）
+  global-multiplier: 1.0

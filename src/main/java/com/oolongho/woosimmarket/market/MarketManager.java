@@ -59,8 +59,9 @@ public class MarketManager {
     private final int bucketCount;
     private final int bucketMinutes;
 
-    /** 物品标准价信息。 */
-    public record ItemInfo(String itemId, double standardPrice, int targetVolume) {}
+    /** 物品标准价信息。priceSensitivity/marketSensitivity 为 -1 时用全局默认。 */
+    public record ItemInfo(String itemId, double standardPrice, int targetVolume,
+                           double priceSensitivity, double marketSensitivity) {}
 
     @SuppressWarnings("unchecked")
     public MarketManager(WooSimMarket plugin, ConfigLoader configLoader) {
@@ -126,7 +127,25 @@ public class MarketManager {
             return DEFAULT_BASE_PRICE;
         }
         double multiplier = computeMultiplier(itemId);
-        return info.standardPrice() * Math.pow(multiplier, multiplierExponent);
+        // 物品级 market-sensitivity 覆盖全局 exponent
+        double exponent = info.marketSensitivity() >= 0 ? info.marketSensitivity() : multiplierExponent;
+        return info.standardPrice() * Math.pow(multiplier, exponent);
+    }
+
+    /**
+     * 获取物品的价格敏感度（P 公式指数）。
+     *
+     * <p>优先返回 items.yml 的 per-item price-sensitivity，缺省（-1）返回全局 sensitivity。</p>
+     *
+     * @param itemId 物品 ID
+     * @return 价格敏感度
+     */
+    public double getItemPriceSensitivity(String itemId) {
+        ItemInfo info = itemInfos.get(itemId);
+        if (info != null && info.priceSensitivity() >= 0) {
+            return info.priceSensitivity();
+        }
+        return configLoader.getMarketSensitivity();
     }
 
     /**
@@ -193,7 +212,11 @@ public class MarketManager {
             }
             double standardPrice = itemSection.getDouble("standard-price", DEFAULT_BASE_PRICE);
             int targetVolume = itemSection.getInt("target-volume", 100);
-            itemInfos.put(itemId, new ItemInfo(itemId, standardPrice, targetVolume));
+            // per-item 敏感度覆盖（-1 表示用全局默认）
+            double priceSensitivity = itemSection.getDouble("price-sensitivity", -1.0);
+            double marketSensitivity = itemSection.getDouble("market-sensitivity", -1.0);
+            itemInfos.put(itemId, new ItemInfo(itemId, standardPrice, targetVolume,
+                    priceSensitivity, marketSensitivity));
         }
 
         plugin.getLogger().info(() -> "items.yml 加载完成: " + itemInfos.size() + " 个物品");

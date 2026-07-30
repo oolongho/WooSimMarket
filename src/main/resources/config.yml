@@ -79,20 +79,6 @@ npc:
       - "#FFA040"
       - "#A040FF"
 
-market:
-  # 购买概率敏感度：P = (Base / UserPrice) ^ sensitivity × global-multiplier
-  sensitivity: 2.0
-  # 供需倍率钳制区间
-  multiplier-min: 0.1
-  multiplier-max: 5.0
-  # 倍率指数：FinalBase = StandardPrice × Multiplier ^ exponent
-  multiplier-exponent: 0.8
-  # 时间桶数量（72 桶 × 5 分钟 = 6 小时滑动窗口）
-  bucket-count: 72
-  bucket-minutes: 5
-  # 全局购买倍率（整体热度）
-  global-multiplier: 1.0
-
 skin:
   # NPC 皮肤来源玩家名列表（Ashcon API 按名获取 skin）
   names:

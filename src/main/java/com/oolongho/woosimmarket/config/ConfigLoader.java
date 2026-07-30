@@ -1,9 +1,11 @@
 package com.oolongho.woosimmarket.config;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import com.oolongho.woosimmarket.WooSimMarket;
 
@@ -20,6 +22,8 @@ public class ConfigLoader {
 
     private final WooSimMarket plugin;
     private FileConfiguration config;
+    /** 市场配置（独立文件 market.yml）。 */
+    private FileConfiguration marketConfig;
 
     // settings
     private boolean debug;
@@ -69,7 +73,19 @@ public class ConfigLoader {
     public void initialize() {
         plugin.saveDefaultConfig();
         config = plugin.getConfig();
+        loadMarketConfig();
         loadValues();
+    }
+
+    /**
+     * 加载 market.yml（首次不存在则释放默认文件）。
+     */
+    private void loadMarketConfig() {
+        File marketFile = new File(plugin.getDataFolder(), "market.yml");
+        if (!marketFile.exists()) {
+            plugin.saveResource("market.yml", false);
+        }
+        marketConfig = YamlConfiguration.loadConfiguration(marketFile);
     }
 
     /**
@@ -98,15 +114,15 @@ public class ConfigLoader {
         npcSkinParts = config.getInt("npc.skin-parts", 0xFF);
         pathfindingAvoidHazards = config.getBoolean("npc.pathfinding-avoid-hazards", true);
 
-        // market
-        marketSensitivity = Math.max(0.1, config.getDouble("market.sensitivity", 2.0));
-        marketMultiplierMin = Math.max(0.001, config.getDouble("market.multiplier-min", 0.1));
+        // market（从独立文件 market.yml 读取）
+        marketSensitivity = Math.max(0.1, marketConfig.getDouble("market.sensitivity", 2.0));
+        marketMultiplierMin = Math.max(0.001, marketConfig.getDouble("market.multiplier-min", 0.1));
         // 保证 max >= min
-        marketMultiplierMax = Math.max(marketMultiplierMin, config.getDouble("market.multiplier-max", 5.0));
-        marketMultiplierExponent = Math.max(0.0, config.getDouble("market.multiplier-exponent", 0.8));
-        marketBucketCount = Math.max(1, config.getInt("market.bucket-count", 72));
-        marketBucketMinutes = Math.max(1, config.getInt("market.bucket-minutes", 5));
-        marketGlobalMultiplier = Math.max(0.0, config.getDouble("market.global-multiplier", 1.0));
+        marketMultiplierMax = Math.max(marketMultiplierMin, marketConfig.getDouble("market.multiplier-max", 5.0));
+        marketMultiplierExponent = Math.max(0.0, marketConfig.getDouble("market.multiplier-exponent", 0.8));
+        marketBucketCount = Math.max(1, marketConfig.getInt("market.bucket-count", 72));
+        marketBucketMinutes = Math.max(1, marketConfig.getInt("market.bucket-minutes", 5));
+        marketGlobalMultiplier = Math.max(0.0, marketConfig.getDouble("market.global-multiplier", 1.0));
 
         // skin
         skinNames = config.getStringList("skin.names");
@@ -127,6 +143,7 @@ public class ConfigLoader {
     public void reload() {
         plugin.reloadConfig();
         config = plugin.getConfig();
+        loadMarketConfig();
         loadValues();
     }
 
