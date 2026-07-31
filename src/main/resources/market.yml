@@ -48,8 +48,10 @@ market:
   bucket-count: 72
   # 每桶时长（分钟）
   bucket-minutes: 5
-  # 全局热度倍率（整体购买意愿缩放，>1 更活跃）
-  global-multiplier: 1.0
+  # 全局购买意愿缩放（P 公式最终乘数）。<1 让公平价也产生犹豫：
+  #   0.6 → 公平价 P≈0.6（犹豫），8折 P≈0.94（倾向买），半价 P=1.0（必买）
+  #   1.0 → 公平价 P=1.0（必买，无犹豫）
+  global-multiplier: 0.6
   # 时间因子幅度（0=全局禁用时间影响；1.0=默认）
   # dayNess 正午=1 半夜=0；timePreference 0=夜型 1=日型 0.5=中性（中性时 timeFactor恒=1）
   time-strength: 1.0

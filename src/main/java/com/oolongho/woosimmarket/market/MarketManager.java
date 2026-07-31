@@ -163,10 +163,13 @@ public class MarketManager {
      * 计算指定物品的市场倍率。
      *
      * <p>公式：{@code Multiplier = TargetVolume / CurrentTotalPurchases}（钳制 [min, max]）<br>
-     * 无购买记录时返回 {@code multiplierMax}（鼓励购买）。</p>
+     * 无购买记录时返回 {@code 1.0}（中性）。理由：返回 {@code multiplierMax} 会令
+     * basePrice 虚高（×5^exponent），priceFactor 爆炸至 ≫1，P 钳制 1.0，导致 NPC
+     * 首次 roll 必中、无徘徊区间。返回 1.0 让 basePrice=standardPrice，P 由
+     * {@code userPrice vs standardPrice} 决定，定价高于标准价时 P 落入 (0,1) 徘徊区间。</p>
      *
      * @param itemId 物品 ID
-     * @return 市场倍率 [multiplierMin, multiplierMax]
+     * @return 市场倍率 [multiplierMin, multiplierMax]；无记录时返回 1.0
      */
     public double getMultiplier(String itemId) {
         ItemInfo info = itemInfos.get(itemId);
@@ -180,7 +183,7 @@ public class MarketManager {
         }
 
         if (totalPurchases == 0) {
-            return multiplierMax;
+            return 1.0;
         }
 
         double multiplier = (double) info.targetVolume() / totalPurchases;

@@ -117,6 +117,9 @@ public class ThoughtDisplayManager {
             return;
         }
 
+        // 防御性清理旧 handle（spec 要求覆盖语义，不应发生但防御）
+        despawn(npc);
+
         Location displayLoc = loc.clone().add(0, configLoader.getThoughtDisplayYOffset(), 0);
         TextDisplay display = world.spawn(displayLoc, TextDisplay.class, entity -> {
             entity.setBillboard(configLoader.getThoughtDisplayBillboard());
