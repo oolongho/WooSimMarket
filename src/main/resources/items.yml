@@ -13,19 +13,19 @@
 items:
   DIAMOND:
     standard-price: 100.0
-    target-volume: 50
+    target-volume: 64
     # 稀有物品：价格/市场敏感度低于全局（提价与供需影响更小）
     price-sensitivity: 1.5
     market-sensitivity: 0.6
   IRON_INGOT:
-    standard-price: 10.0
-    target-volume: 200
+    standard-price: 2.0
+    target-volume: 128
   BREAD:
     standard-price: 5.0
-    target-volume: 500
+    target-volume: 128
   GOLDEN_APPLE:
     standard-price: 200.0
-    target-volume: 20
+    target-volume: 64
     # 稀有物品：价格/市场敏感度低于全局
     price-sensitivity: 1.2
     market-sensitivity: 0.5

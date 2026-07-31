@@ -1,8 +1,14 @@
 # WooSimMarket 配置文件
 
 settings:
-  # 调试模式：开启后输出详细日志（NPC 生成、购买判定、市场调价等）
-  debug: false
+  # 调试日志细分开关（互不依赖，按需开启）
+  debug:
+    # 购买判定：P 值计算、各因子（budget/price/weather/time/multiplier）、roll 结果
+    purchase: false
+    # 寻路：请求/结果/迭代数/区块快照
+    pathfinding: false
+    # 其他：NPC 生成/销毁/皮肤/市场调价/思考文本
+    general: false
   # 语言文件（对应 lang/<language>.yml），可选 zh-CN / en-US
   language: zh-CN
 

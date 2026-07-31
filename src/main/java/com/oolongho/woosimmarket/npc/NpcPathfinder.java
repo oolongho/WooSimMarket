@@ -60,7 +60,7 @@ public final class NpcPathfinder {
                                 Location start, Location target,
                                 int maxDistance, int maxIterations,
                                 Consumer<List<Location>> callback) {
-        boolean debug = plugin.getConfigLoader().isDebug();
+        boolean debug = plugin.getConfigLoader().isDebugPathfinding();
         boolean avoidHazards = plugin.getConfigLoader().isPathfindingAvoidHazards();
 
         if (debug) {

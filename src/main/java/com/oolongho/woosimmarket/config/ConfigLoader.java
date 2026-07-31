@@ -30,7 +30,9 @@ public class ConfigLoader {
     private FileConfiguration personalitiesConfig;
 
     // settings
-    private boolean debug;
+    private boolean debugPurchase;
+    private boolean debugPathfinding;
+    private boolean debugGeneral;
     private String language;
 
     // shop
@@ -125,7 +127,9 @@ public class ConfigLoader {
      */
     private void loadValues() {
         // settings
-        debug = config.getBoolean("settings.debug", false);
+        debugPurchase = config.getBoolean("settings.debug.purchase", false);
+        debugPathfinding = config.getBoolean("settings.debug.pathfinding", false);
+        debugGeneral = config.getBoolean("settings.debug.general", false);
         language = config.getString("settings.language", "zh-CN");
 
         // shop
@@ -230,8 +234,16 @@ public class ConfigLoader {
 
     // ===== Getter =====
 
-    public boolean isDebug() {
-        return debug;
+    public boolean isDebugPurchase() {
+        return debugPurchase;
+    }
+
+    public boolean isDebugPathfinding() {
+        return debugPathfinding;
+    }
+
+    public boolean isDebugGeneral() {
+        return debugGeneral;
     }
 
     public String getLanguage() {

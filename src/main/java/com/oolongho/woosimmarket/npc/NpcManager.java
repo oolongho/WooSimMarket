@@ -291,7 +291,7 @@ public class NpcManager {
             messages.send(p, "npc-purchased", "npc", npc.name(), "item", itemId, "price", priceStr);
         }
 
-        if (configLoader.isDebug()) {
+        if (configLoader.isDebugGeneral()) {
             plugin.getLogger().info(() -> String.format(
                     "NPC %s 购买了 %s x%d，单价 %.2f", npc.name(), itemId, purchased, shelf.price()));
         }
@@ -380,7 +380,7 @@ public class NpcManager {
         npcsById.put(npc.uuid(), npc);
         npcsByShop.computeIfAbsent(shop.id(), k -> new ArrayList<>()).add(npc.uuid());
 
-        if (configLoader.isDebug()) {
+        if (configLoader.isDebugGeneral()) {
             plugin.getLogger().info(() -> String.format(
                     "生成 NPC %s [性格=%s] → 商店 %s → 货架 %s start=(%d,%d,%d) target=(%d,%d,%d)（等待寻路）",
                     name, personality.name(), shop.id(), target.id(),
@@ -406,7 +406,7 @@ public class NpcManager {
                     // 路径就绪：setPath 切换到 MOVING 状态，发送生成包
                     npc.setPath(path);
                     packetSender.spawnToNearby(npc, BROADCAST_RADIUS);
-                    if (configLoader.isDebug()) {
+                    if (configLoader.isDebugGeneral()) {
                         plugin.getLogger().info(() -> "NPC " + name + " 寻路成功，" + path.size() + " 个路径点");
                     }
                 });

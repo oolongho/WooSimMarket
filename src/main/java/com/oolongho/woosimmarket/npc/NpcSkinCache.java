@@ -100,7 +100,7 @@ public class NpcSkinCache {
             if (fetched > 0) {
                 save();
             }
-            if (plugin.getConfigLoader().isDebug()) {
+            if (plugin.getConfigLoader().isDebugGeneral()) {
                 int finalFetched = fetched;
                 int finalFailed = failed;
                 plugin.getLogger().info(() -> String.format(

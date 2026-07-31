@@ -2,6 +2,7 @@ package com.oolongho.woosimmarket.market;
 
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.npc.PersonalityProfile;
+import org.bukkit.Bukkit;
 import org.bukkit.World;
 
 /**
@@ -52,10 +53,18 @@ public class PurchaseFormula {
             return 0.0;
         }
 
+        boolean dbg = configLoader.isDebugPurchase();
         double standardPrice = marketManager.getStandardPrice(itemId);
 
         // ① budget 硬门：budget 是公平价倍数，基准用 standardPrice 不随供需波动
-        if (userPrice > personality.budget() * standardPrice) {
+        double budgetLimit = personality.budget() * standardPrice;
+        if (userPrice > budgetLimit) {
+            if (dbg) {
+                Bukkit.getLogger().info(String.format(
+                    "[WooSimMarket][Purchase] %s/%s price=%.2f > budget门=%.2f(%.1f×%.2f) → P=0.000 拒绝",
+                    personality.name(), itemId, userPrice, budgetLimit,
+                    personality.budget(), standardPrice));
+            }
             return 0.0;
         }
 
@@ -75,7 +84,16 @@ public class PurchaseFormula {
         double timeFactor = 1.0 + timeStrength * (personality.timePreference() - 0.5) * 2.0 * (dayNess - 0.5);
 
         // ⑤ 合成并钳制最终概率
-        double p = priceFactor * weatherFactor * timeFactor * configLoader.getMarketGlobalMultiplier();
-        return Math.max(0.0, Math.min(1.0, p));
+        double globalMult = configLoader.getMarketGlobalMultiplier();
+        double p = Math.max(0.0, Math.min(1.0, priceFactor * weatherFactor * timeFactor * globalMult));
+
+        if (dbg) {
+            Bukkit.getLogger().info(String.format(
+                "[WooSimMarket][Purchase] %s/%s price=%.2f std=%.2f | budget门=%.2f通过 | mult=%.2f base=%.2f priceF=%.3f(sens=%.2f) | weather=%.2f time=%.2f(dayNess=%.2f) global=%.2f | → P=%.3f",
+                personality.name(), itemId, userPrice, standardPrice, budgetLimit,
+                multiplier, basePrice, priceFactor, effectiveSensitivity,
+                weatherFactor, timeFactor, dayNess, globalMult, p));
+        }
+        return p;
     }
 }

@@ -197,7 +197,7 @@ public class MarketManager {
         currentBucketIndex = (currentBucketIndex + 1) % bucketCount;
         buckets[currentBucketIndex].clear();
 
-        if (configLoader.isDebug()) {
+        if (configLoader.isDebugGeneral()) {
             plugin.getLogger().info(() -> String.format(
                     "市场桶滚动: index=%d/%d", currentBucketIndex, bucketCount - 1));
         }

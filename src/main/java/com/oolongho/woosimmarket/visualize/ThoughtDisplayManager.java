@@ -245,7 +245,7 @@ public class ThoughtDisplayManager {
      */
     private Component buildText(SimNpc npc, Phase phase) {
         String text = messages.thoughtText(npc.personality().name(), phase.key());
-        if (configLoader.isDebug() && (phase == Phase.ENTER || phase == Phase.HESITATE)) {
+        if (configLoader.isDebugGeneral() && (phase == Phase.ENTER || phase == Phase.HESITATE)) {
             text = text + messages.thoughtDebugSuffix(
                     npc.deliberationProbability(),
                     npc.deliberationRollsDone(),
