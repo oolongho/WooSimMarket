@@ -2,7 +2,9 @@ package com.oolongho.woosimmarket.gui;
 
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
+import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.model.Shop;
+import com.oolongho.woosimmarket.shop.ShopManager;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -19,7 +21,7 @@ import java.util.List;
  *
  * <p>27 格箱子布局：
  * <ul>
- *   <li>slot 13：信息按钮（显示当前余额）</li>
+ *   <li>slot 13：信息按钮（显示当前余额与货架启用数量）</li>
  *   <li>slot 11：提现按钮（点击 → 调用 EconomyManager.withdrawShopBalance → 刷新 GUI）</li>
  *   <li>slot 15：刷新按钮（点击重新读取余额并刷新显示）</li>
  *   <li>其余：灰色玻璃边框（不可交互）</li>
@@ -43,11 +45,13 @@ public class ShopGui implements InventoryHolder {
 
     private final Shop shop;
     private final EconomyManager economyManager;
+    private final ShopManager shopManager;
     private final Inventory inventory;
 
-    public ShopGui(Shop shop, EconomyManager economyManager, Messages messages) {
+    public ShopGui(Shop shop, EconomyManager economyManager, ShopManager shopManager, Messages messages) {
         this.shop = shop;
         this.economyManager = economyManager;
+        this.shopManager = shopManager;
         Component title = messages.get("gui-shop-title");
         this.inventory = Bukkit.createInventory(this, SIZE, title);
         render(messages);
@@ -64,7 +68,7 @@ public class ShopGui implements InventoryHolder {
             }
         }
 
-        inventory.setItem(SLOT_INFO, createInfoButton(shop, economyManager, messages));
+        inventory.setItem(SLOT_INFO, createInfoButton(shop, economyManager, shopManager, messages));
         inventory.setItem(SLOT_WITHDRAW, createWithdrawButton(messages));
         inventory.setItem(SLOT_REFRESH, createRefreshButton(messages));
     }
@@ -84,7 +88,7 @@ public class ShopGui implements InventoryHolder {
      * @param messages 消息管理器
      */
     public void refresh(Messages messages) {
-        inventory.setItem(SLOT_INFO, createInfoButton(shop, economyManager, messages));
+        inventory.setItem(SLOT_INFO, createInfoButton(shop, economyManager, shopManager, messages));
     }
 
     @Override
@@ -108,13 +112,20 @@ public class ShopGui implements InventoryHolder {
         return item;
     }
 
-    private static ItemStack createInfoButton(Shop shop, EconomyManager economyManager, Messages messages) {
+    private static ItemStack createInfoButton(Shop shop, EconomyManager economyManager, ShopManager shopManager, Messages messages) {
         ItemStack item = new ItemStack(Material.BOOK);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.displayName(messages.get("gui-shop-info"));
             String balanceText = economyManager.format(shop.balance());
-            meta.lore(List.of(messages.get("gui-shop-balance", "balance", balanceText)));
+            // 统计货架启用数量
+            List<Shelf> shelves = shopManager.getShelvesByShop(shop.id());
+            int enabled = (int) shelves.stream().filter(Shelf::enabled).count();
+            int total = shelves.size();
+            meta.lore(List.of(
+                    messages.get("gui-shop-balance", "balance", balanceText),
+                    messages.get("gui-shop-shelves", "enabled", String.valueOf(enabled), "total", String.valueOf(total))
+            ));
             item.setItemMeta(meta);
         }
         return item;

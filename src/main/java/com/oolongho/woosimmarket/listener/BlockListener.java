@@ -9,6 +9,7 @@ import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
+import com.oolongho.woosimmarket.visualize.ShopDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Directional;
@@ -38,17 +39,20 @@ public class BlockListener implements Listener {
     private final CraftEngineHook craftEngine;
     private final Messages messages;
     private final ShelfDisplayManager shelfDisplayManager;
+    private final ShopDisplayManager shopDisplayManager;
     private final ShopRangeVisualizer shopRangeVisualizer;
 
     public BlockListener(WooSimMarket plugin, ShopManager shopManager,
                          CraftEngineHook craftEngine, Messages messages,
                          ShelfDisplayManager shelfDisplayManager,
+                         ShopDisplayManager shopDisplayManager,
                          ShopRangeVisualizer shopRangeVisualizer) {
         this.plugin = plugin;
         this.shopManager = shopManager;
         this.craftEngine = craftEngine;
         this.messages = messages;
         this.shelfDisplayManager = shelfDisplayManager;
+        this.shopDisplayManager = shopDisplayManager;
         this.shopRangeVisualizer = shopRangeVisualizer;
     }
 
@@ -83,6 +87,7 @@ public class BlockListener implements Listener {
             if (shop != null) {
                 // 必须在 removeShop 之前移除展示：removeShop 会清空关联货架索引，
                 // 之后再调用 removeShelvesByShop 将查不到货架
+                shopDisplayManager.removeDisplayByShop(shop.id());
                 shelfDisplayManager.removeShelvesByShop(shop.id());
                 shopManager.removeShop(shop.id());
                 plugin.getLogger().info(() -> "商店 " + shop.id() + " 因方块破坏已移除");
@@ -160,6 +165,7 @@ public class BlockListener implements Listener {
             return;
         }
         messages.send(player, "shop-created");
+        shopDisplayManager.spawnDisplay(shop);
         shopRangeVisualizer.showRange(player, shop);
     }
 
@@ -230,7 +236,7 @@ public class BlockListener implements Listener {
             return;
         }
 
-        new ShopGui(shop, plugin.getEconomyManager(), messages).open(player);
+        new ShopGui(shop, plugin.getEconomyManager(), plugin.getShopManager(), messages).open(player);
     }
 
     /**

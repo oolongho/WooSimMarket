@@ -26,6 +26,7 @@ import com.oolongho.woosimmarket.npc.PersonalityManager;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
+import com.oolongho.woosimmarket.visualize.ShopDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
 import com.oolongho.woosimmarket.visualize.ThoughtDisplayManager;
 import com.oolongho.woosimmarket.command.MainCommand;
@@ -76,6 +77,7 @@ public class WooSimMarket extends JavaPlugin {
     private PersonalityManager personalityManager;
     private NpcManager npcManager;
     private ShelfDisplayManager shelfDisplayManager;
+    private ShopDisplayManager shopDisplayManager;
     private ThoughtDisplayManager thoughtDisplayManager;
     private ShopRangeVisualizer shopRangeVisualizer;
 
@@ -122,6 +124,9 @@ public class WooSimMarket extends JavaPlugin {
         // 7.5. 可视化管理器（依赖 ShopManager 内存数据，需在 loadAll 之后初始化）
         shelfDisplayManager = new ShelfDisplayManager(this, shopManager, configLoader);
         shelfDisplayManager.init();
+        // 7.6. 收银台全息展示管理器（依赖 ShopManager 内存数据）
+        shopDisplayManager = new ShopDisplayManager(this, shopManager, configLoader, messages);
+        shopDisplayManager.init();
         shopRangeVisualizer = new ShopRangeVisualizer(this, configLoader);
 
         // 8. PricingManager
@@ -186,6 +191,10 @@ public class WooSimMarket extends JavaPlugin {
         if (shelfDisplayManager != null) {
             shelfDisplayManager.clearAll();
         }
+        // 移除所有收银台展示实体
+        if (shopDisplayManager != null) {
+            shopDisplayManager.clearAll();
+        }
         // 关闭市场系统
         if (marketManager != null) {
             marketManager.stop();
@@ -217,7 +226,7 @@ public class WooSimMarket extends JavaPlugin {
     private void registerListeners() {
         Bukkit.getPluginManager().registerEvents(
                 new BlockListener(this, shopManager, craftEngineHook, messages,
-                        shelfDisplayManager, shopRangeVisualizer), this);
+                        shelfDisplayManager, shopDisplayManager, shopRangeVisualizer), this);
         Bukkit.getPluginManager().registerEvents(
                 new ShelfGuiListener(this, shopManager, pricingManager, messages, shelfDisplayManager), this);
         Bukkit.getPluginManager().registerEvents(
@@ -227,7 +236,7 @@ public class WooSimMarket extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(
                 new PlayerListener(npcPacketSender), this);
         Bukkit.getPluginManager().registerEvents(
-                new ChunkListener(shelfDisplayManager), this);
+                new ChunkListener(shelfDisplayManager, shopDisplayManager), this);
     }
 
     // ===== Getter =====
@@ -282,6 +291,10 @@ public class WooSimMarket extends JavaPlugin {
 
     public ShelfDisplayManager getShelfDisplayManager() {
         return shelfDisplayManager;
+    }
+
+    public ShopDisplayManager getShopDisplayManager() {
+        return shopDisplayManager;
     }
 
     public ShopRangeVisualizer getShopRangeVisualizer() {

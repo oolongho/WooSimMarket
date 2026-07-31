@@ -78,6 +78,12 @@ public class ConfigLoader {
     private boolean thoughtDisplayShadow;
     private boolean thoughtDisplaySeeThrough;
 
+    // visualization.shop-display（收银台全息展示）
+    private boolean shopDisplayEnabled;
+    private double shopDisplayHeadYOffset;
+    private double shopDisplayNameYOffset;
+    private String shopDisplayTextColor;
+
     public ConfigLoader(WooSimMarket plugin) {
         this.plugin = plugin;
     }
@@ -185,6 +191,12 @@ public class ConfigLoader {
                 config.getString("visualization.thought-display.background-color", "0,0,0,64"));
         thoughtDisplayShadow = config.getBoolean("visualization.thought-display.shadow", true);
         thoughtDisplaySeeThrough = config.getBoolean("visualization.thought-display.see-through", false);
+
+        // visualization.shop-display（收银台全息展示）
+        shopDisplayEnabled = config.getBoolean("visualization.shop-display.enabled", true);
+        shopDisplayHeadYOffset = Math.max(0.0, config.getDouble("visualization.shop-display.head-y-offset", 1.5));
+        shopDisplayNameYOffset = Math.max(0.0, config.getDouble("visualization.shop-display.name-y-offset", 1.2));
+        shopDisplayTextColor = config.getString("visualization.shop-display.text-color", "#a3b547");
     }
 
     /**
@@ -486,5 +498,25 @@ public class ConfigLoader {
     /** TextDisplay 是否穿透方块遮挡。 */
     public boolean isThoughtDisplaySeeThrough() {
         return thoughtDisplaySeeThrough;
+    }
+
+    /** 收银台全息展示是否启用。 */
+    public boolean isShopDisplayEnabled() {
+        return shopDisplayEnabled;
+    }
+
+    /** 店主头颅 Y 偏移（相对收银台方块底面）。 */
+    public double getShopDisplayHeadYOffset() {
+        return shopDisplayHeadYOffset;
+    }
+
+    /** 店名文字 Y 偏移（相对收银台方块底面）。 */
+    public double getShopDisplayNameYOffset() {
+        return shopDisplayNameYOffset;
+    }
+
+    /** 店名文字颜色（十六进制字符串，如 "#a3b547"）。 */
+    public String getShopDisplayTextColor() {
+        return shopDisplayTextColor;
     }
 }
