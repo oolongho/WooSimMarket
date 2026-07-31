@@ -118,3 +118,21 @@ visualization:
     item-offset-y: 1.2
   # 商店范围粒子圆环持续秒数（创建时与 /wsm range 均生效）
   range-duration-seconds: 10
+
+  # NPC 头顶思考展示（子系统 4，DELIBERATING 期间展示性格化思考文本）
+  thought-display:
+    # 总开关；false 时所有展示方法 no-op，无实体无任务
+    enabled: true
+    # TextDisplay 相对 NPC 脚位的 Y 偏移（格），2.3 ≈ 头顶上方
+    y-offset: 2.3
+    # BUY/GIVE_UP 结果文本停留时长（ticks，20t=1s），到点后 despawn
+    flash-duration-ticks: 40
+    # 朝向模式：CENTER（始终面向玩家，与货架一致）/ FIXED / VERTICAL / HORIZONTAL
+    # 配置无效时兜底 CENTER
+    billboard: CENTER
+    # 背景色 RGBA（0-255，逗号分隔），半透明黑底提升对比度；配置无效时兜底 0,0,0,64
+    background-color: "0,0,0,64"
+    # 文本阴影（提升对比度）
+    shadow: true
+    # 是否穿透方块遮挡（false=被方块遮挡时隐藏）
+    see-through: false

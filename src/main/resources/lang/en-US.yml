@@ -64,3 +64,23 @@ command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket Commands</bold></color>
 command-give-success: "{prefix}<color:#10B981>Gave {item} to {player}.</color>"
 command-info: "{prefix}<color:#9CA3AF>Shop info: ID={id} balance={balance}</color>"
 command-list: "{prefix}<color:#9CA3AF>{player}'s shops: {shops}</color>"
+
+# NPC thought display (subsystem 4, 13 personalities × 4 phases = 52 entries, flow-mapping style)
+# Phase keys: enter / hesitate / buy / give-up
+thought-display:
+  normal:         { enter: "<i><gray>Thinking…</gray></i>", hesitate: "<i><gray>Hesitating…</gray></i>", buy: "<green>I'll buy it!</green>", give-up: "<gray>Never mind.</gray>" }
+  generous:       { enter: "<i><gray>Looks nice…</gray></i>", hesitate: "<i><gray>Let me see…</gray></i>", buy: "<green>Great price!</green>", give-up: "<gray>Maybe next time.</gray>" }
+  stingy:         { enter: "<i><gray>Calculating price…</gray></i>", hesitate: "<i><gray>Still too pricey…</gray></i>", buy: "<green>Barely acceptable!</green>", give-up: "<gray>Too expensive, leaving.</gray>" }
+  trend-follower: { enter: "<i><gray>Everyone's buying…</gray></i>", hesitate: "<i><gray>Should I follow…</gray></i>", buy: "<green>Following the trend!</green>", give-up: "<gray>Not following, leaving.</gray>" }
+  independent:    { enter: "<i><gray>Thinking independently…</gray></i>", hesitate: "<i><gray>Not easily swayed…</gray></i>", buy: "<green>Decided for myself!</green>", give-up: "<gray>No need to follow.</gray>" }
+  impatient:      { enter: "<i><gray>Buy or not…</gray></i>", hesitate: "<i><gray>Decide already…</gray></i>", buy: "<green>This one!</green>", give-up: "<gray>No more dawdling, leaving.</gray>" }
+  patient:        { enter: "<i><gray>Thinking carefully…</gray></i>", hesitate: "<i><gray>Let me consider…</gray></i>", buy: "<green>Made up my mind, buying!</green>", give-up: "<gray>Not the right time, leaving.</gray>" }
+  rich:           { enter: "<i><gray>Just browsing…</gray></i>", hesitate: "<i><gray>Money's no issue…</gray></i>", buy: "<green>I'll take it!</green>", give-up: "<gray>Nothing catches my eye, leaving.</gray>" }
+  poor:           { enter: "<i><gray>Checking my pockets…</gray></i>", hesitate: "<i><gray>Do I have enough…</gray></i>", buy: "<green>Just enough, buying!</green>", give-up: "<gray>Can't afford it, leaving.</gray>" }
+  homebody:       { enter: "<i><gray>How's the weather…</gray></i>", hesitate: "<i><gray>Don't want to go out…</gray></i>", buy: "<green>Today's fine!</green>", give-up: "<gray>Bad weather, going back.</gray>" }
+  all-weather:    { enter: "<i><gray>Rain or shine…</gray></i>", hesitate: "<i><gray>Keep looking…</gray></i>", buy: "<green>Always ready to buy!</green>", give-up: "<gray>Don't want it anymore.</gray>" }
+  early-bird:     { enter: "<i><gray>Early bird browsing…</gray></i>", hesitate: "<i><gray>Still time…</gray></i>", buy: "<green>Buy early, enjoy early!</green>", give-up: "<gray>Come back later.</gray>" }
+  night-owl:      { enter: "<i><gray>Browsing at night…</gray></i>", hesitate: "<i><gray>It's getting late…</gray></i>", buy: "<green>Night shopping hits the spot!</green>", give-up: "<gray>Almost dawn, leaving.</gray>" }
+
+# Debug suffix (appended to ENTER/HESITATE text when isDebug=true)
+thought-debug-suffix: " <dark_gray>[P={p} {done}/{total}]</dark_gray>"

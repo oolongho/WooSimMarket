@@ -4,8 +4,10 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.bukkit.Color;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Display;
 
 import com.oolongho.woosimmarket.WooSimMarket;
 
@@ -68,6 +70,15 @@ public class ConfigLoader {
 
     // database
     private String databaseFile;
+
+    // visualization.thought-display（头顶思考展示，子系统 4）
+    private boolean thoughtDisplayEnabled;
+    private double thoughtDisplayYOffset;
+    private int thoughtDisplayFlashDurationTicks;
+    private Display.Billboard thoughtDisplayBillboard;
+    private Color thoughtDisplayBackgroundColor;
+    private boolean thoughtDisplayShadow;
+    private boolean thoughtDisplaySeeThrough;
 
     public ConfigLoader(WooSimMarket plugin) {
         this.plugin = plugin;
@@ -164,6 +175,46 @@ public class ConfigLoader {
 
         // database
         databaseFile = config.getString("database.file", "woosimmarket.db");
+
+        // visualization.thought-display（头顶思考展示，子系统 4）
+        thoughtDisplayEnabled = config.getBoolean("visualization.thought-display.enabled", true);
+        thoughtDisplayYOffset = Math.max(0.0, config.getDouble("visualization.thought-display.y-offset", 2.3));
+        thoughtDisplayFlashDurationTicks = Math.max(1, config.getInt("visualization.thought-display.flash-duration-ticks", 40));
+        try {
+            thoughtDisplayBillboard = Display.Billboard.valueOf(
+                    config.getString("visualization.thought-display.billboard", "CENTER").toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            thoughtDisplayBillboard = Display.Billboard.CENTER;
+        }
+        thoughtDisplayBackgroundColor = parseBackgroundColor(
+                config.getString("visualization.thought-display.background-color", "0,0,0,64"));
+        thoughtDisplayShadow = config.getBoolean("visualization.thought-display.shadow", true);
+        thoughtDisplaySeeThrough = config.getBoolean("visualization.thought-display.see-through", false);
+    }
+
+    /**
+     * 解析背景色 RGBA 字符串（如 "0,0,0,64"）为 Bukkit Color。
+     *
+     * <p>格式：r,g,b,a（0-255，逗号分隔）。解析失败时兜底半透明黑底。</p>
+     *
+     * @param value 原始字符串
+     * @return Bukkit Color（ARGB）
+     */
+    private Color parseBackgroundColor(String value) {
+        try {
+            String[] parts = value.split(",");
+            int r = clamp255(Integer.parseInt(parts[0].trim()));
+            int g = clamp255(Integer.parseInt(parts[1].trim()));
+            int b = clamp255(Integer.parseInt(parts[2].trim()));
+            int a = clamp255(Integer.parseInt(parts[3].trim()));
+            return Color.fromARGB(a, r, g, b);
+        } catch (Exception ex) {
+            return Color.fromARGB(64, 0, 0, 0);
+        }
+    }
+
+    private int clamp255(int v) {
+        return Math.max(0, Math.min(255, v));
     }
 
     /**
@@ -412,5 +463,40 @@ public class ConfigLoader {
      */
     public int getRangeDurationSeconds() {
         return config.getInt("visualization.range-duration-seconds", 10);
+    }
+
+    /** 头顶思考展示是否启用。 */
+    public boolean isThoughtDisplayEnabled() {
+        return thoughtDisplayEnabled;
+    }
+
+    /** TextDisplay 相对 NPC 脚位的 Y 偏移（格）。 */
+    public double getThoughtDisplayYOffset() {
+        return thoughtDisplayYOffset;
+    }
+
+    /** BUY/GIVE_UP 结果文本停留时长（ticks）。 */
+    public int getThoughtDisplayFlashDurationTicks() {
+        return thoughtDisplayFlashDurationTicks;
+    }
+
+    /** TextDisplay 朝向模式（默认 CENTER）。 */
+    public Display.Billboard getThoughtDisplayBillboard() {
+        return thoughtDisplayBillboard;
+    }
+
+    /** TextDisplay 背景色（ARGB）。 */
+    public Color getThoughtDisplayBackgroundColor() {
+        return thoughtDisplayBackgroundColor;
+    }
+
+    /** TextDisplay 文本阴影。 */
+    public boolean isThoughtDisplayShadow() {
+        return thoughtDisplayShadow;
+    }
+
+    /** TextDisplay 是否穿透方块遮挡。 */
+    public boolean isThoughtDisplaySeeThrough() {
+        return thoughtDisplaySeeThrough;
     }
 }

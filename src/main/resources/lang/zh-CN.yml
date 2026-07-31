@@ -73,3 +73,23 @@ command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket 命令</bold></color>"
 command-give-success: "{prefix}<color:#10B981>已将 {item} 给予 {player}。</color>"
 command-info: "{prefix}<color:#9CA3AF>商店信息：ID={id} 余额={balance}</color>"
 command-list: "{prefix}<color:#9CA3AF>{player} 的商店列表：{shops}</color>"
+
+# NPC 头顶思考展示（子系统 4，13 性格 × 4 阶段 = 52 条，flow-mapping 风格）
+# 阶段键：enter（进入徘徊）/ hesitate（未命中余量）/ buy（命中）/ give-up（耗尽）
+thought-display:
+  normal:         { enter: "<i><gray>思考中…</gray></i>", hesitate: "<i><gray>犹豫不决…</gray></i>", buy: "<green>决定购买！</green>", give-up: "<gray>算了，不买了</gray>" }
+  generous:       { enter: "<i><gray>看着不错…</gray></i>", hesitate: "<i><gray>再瞅瞅…</gray></i>", buy: "<green>这个价很值！</green>", give-up: "<gray>下次再说吧</gray>" }
+  stingy:         { enter: "<i><gray>盘算着价格…</gray></i>", hesitate: "<i><gray>还是太贵…</gray></i>", buy: "<green>勉强能接受！</green>", give-up: "<gray>太贵了，走人</gray>" }
+  trend-follower: { enter: "<i><gray>大家都在买…</gray></i>", hesitate: "<i><gray>跟不跟呢…</gray></i>", buy: "<green>跟上潮流！</green>", give-up: "<gray>不跟了，走</gray>" }
+  independent:    { enter: "<i><gray>独立想想…</gray></i>", hesitate: "<i><gray>不被左右…</gray></i>", buy: "<green>自己决定了！</green>", give-up: "<gray>不必从众</gray>" }
+  impatient:      { enter: "<i><gray>买不买呢…</gray></i>", hesitate: "<i><gray>快点决定…</gray></i>", buy: "<green>就它了！</green>", give-up: "<gray>不磨蹭了，走</gray>" }
+  patient:        { enter: "<i><gray>仔细想想…</gray></i>", hesitate: "<i><gray>再考虑考虑…</gray></i>", buy: "<green>想清楚了，买！</green>", give-up: "<gray>时机未到，走吧</gray>" }
+  rich:           { enter: "<i><gray>随便看看…</gray></i>", hesitate: "<i><gray>钱不是问题…</gray></i>", buy: "<green>直接拿下！</green>", give-up: "<gray>没看上，走</gray>" }
+  poor:           { enter: "<i><gray>摸摸口袋…</gray></i>", hesitate: "<i><gray>够不够钱…</gray></i>", buy: "<green>刚好够，买！</green>", give-up: "<gray>买不起，走</gray>" }
+  homebody:       { enter: "<i><gray>天气怎么样…</gray></i>", hesitate: "<i><gray>不太想出门…</gray></i>", buy: "<green>今天可以！</green>", give-up: "<gray>天气不好，回</gray>" }
+  all-weather:    { enter: "<i><gray>风雨无阻…</gray></i>", hesitate: "<i><gray>继续看看…</gray></i>", buy: "<green>随时可买！</green>", give-up: "<gray>不想要了</gray>" }
+  early-bird:     { enter: "<i><gray>趁早看看…</gray></i>", hesitate: "<i><gray>还来得及…</gray></i>", buy: "<green>早买早享受！</green>", give-up: "<gray>晚点再来</gray>" }
+  night-owl:      { enter: "<i><gray>夜里逛逛…</gray></i>", hesitate: "<i><gray>夜深了…</gray></i>", buy: "<green>夜购正合意！</green>", give-up: "<gray>天快亮了，走</gray>" }
+
+# Debug 后缀（isDebug=true 时追加到 ENTER/HESITATE 文本末尾）
+thought-debug-suffix: " <dark_gray>[P={p} {done}/{total}]</dark_gray>"

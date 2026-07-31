@@ -10,6 +10,8 @@ import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.util.TaskUtil;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
+import com.oolongho.woosimmarket.visualize.ThoughtDisplayManager;
+import com.oolongho.woosimmarket.visualize.ThoughtDisplayManager.Phase;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -37,7 +39,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>购买判定：NPC 到达货架后委托 {@link PurchaseFormula} 计算 5 因子概率
  * （price/market/budget/weather/time），结果缓存后进入徘徊状态（DELIBERATING），
  * 由 impatience 决定判定次数与间隔，多次 roll 任一命中即购买；命中或判定耗尽
- * 则离开。P=0（硬不可能买）跳过徘徊直接离开。</p>
+ * 则离开。P=0（硬不可能买）跳过徘徊直接离开。徘徊期间由
+ * {@link ThoughtDisplayManager} 在 NPC 头顶展示性格化思考文本。</p>
  *
  * @author oolongho
  */
@@ -55,6 +58,7 @@ public class NpcManager {
     private final MarketManager marketManager;
     private final PurchaseFormula purchaseFormula;
     private final ShelfDisplayManager shelfDisplayManager;
+    private final ThoughtDisplayManager thoughtDisplayManager;
     private final EquipmentProvider equipmentProvider;
     private final PersonalityManager personalityManager;
 
@@ -68,7 +72,8 @@ public class NpcManager {
                       NpcPacketSender packetSender, ConfigLoader configLoader,
                       Messages messages, NpcSkinCache skinCache,
                       MarketManager marketManager, ShelfDisplayManager shelfDisplayManager,
-                      PersonalityManager personalityManager, PurchaseFormula purchaseFormula) {
+                      PersonalityManager personalityManager, PurchaseFormula purchaseFormula,
+                      ThoughtDisplayManager thoughtDisplayManager) {
         this.plugin = plugin;
         this.shopManager = shopManager;
         this.packetSender = packetSender;
@@ -80,6 +85,7 @@ public class NpcManager {
         this.equipmentProvider = new EquipmentProvider(configLoader);
         this.personalityManager = personalityManager;
         this.purchaseFormula = purchaseFormula;
+        this.thoughtDisplayManager = thoughtDisplayManager;
     }
 
     /**
@@ -111,6 +117,7 @@ public class NpcManager {
         npcsById.clear();
         npcsByShop.clear();
         packetSender.clearAllCache();
+        thoughtDisplayManager.clearAll();
     }
 
     /**
@@ -174,6 +181,7 @@ public class NpcManager {
 
         // 进入徘徊状态（首次 roll 即时触发，下一 tick 即 ROLL_DUE）
         npc.startDeliberation(rolls, interval, probability);
+        thoughtDisplayManager.spawn(npc, Phase.ENTER);
     }
 
     /**
@@ -189,23 +197,28 @@ public class NpcManager {
     private void handleRoll(SimNpc npc) {
         Shelf shelf = shopManager.getShelf(npc.shelfId());
         if (shelf == null || !shelf.canSell()) {
-            // 徘徊期间货架被买空/消失，立即离开
+            // 徘徊期间货架被买空/消失，立即回收展示并离开
+            thoughtDisplayManager.despawn(npc);
             npc.startLeaving();
             return;
         }
 
         double roll = ThreadLocalRandom.current().nextDouble();
         if (roll < npc.deliberationProbability()) {
-            // 命中：购买并离开
+            // 命中：购买、flash BUY 文本、离开
             String itemId = getItemName(shelf.itemStack());
             handlePurchase(npc, shelf, itemId);
+            thoughtDisplayManager.flash(npc, Phase.BUY);
             npc.startLeaving();
             return;
         }
 
-        // 未命中：判定耗尽则离开，否则等待下次 roll（计时器已由 SimNpc.tick 重置）
+        // 未命中：判定耗尽则 flash GIVE_UP 并离开，否则切 HESITATE 等待下次 roll
         if (npc.deliberationRollsDone() >= npc.deliberationTotalRolls()) {
+            thoughtDisplayManager.flash(npc, Phase.GIVE_UP);
             npc.startLeaving();
+        } else {
+            thoughtDisplayManager.update(npc, Phase.HESITATE);
         }
     }
 
@@ -290,6 +303,7 @@ public class NpcManager {
      * @param npc NPC
      */
     private void despawnNpc(SimNpc npc) {
+        thoughtDisplayManager.despawn(npc);
         packetSender.removeFromAllTracked(npc);
         npcsById.remove(npc.uuid());
         removeFromShopIndex(npc.shopId(), npc.uuid());

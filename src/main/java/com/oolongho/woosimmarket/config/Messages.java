@@ -172,6 +172,68 @@ public class Messages {
     }
 
     /**
+     * 获取 NPC 头顶思考展示的性格化文本（原始 MiniMessage 字符串，三级兜底）。
+     *
+     * <p>兜底顺序：
+     * <ol>
+     *   <li>{@code thought-display.<personalityKey>.<phaseKey>}（指定性格）</li>
+     *   <li>{@code thought-display.normal.<phaseKey>}（normal 兜底）</li>
+     *   <li>硬编码默认串（最终兜底，不抛异常）</li>
+     * </ol></p>
+     *
+     * @param personalityKey 性格 key（如 "generous"、"stingy"、"normal"）
+     * @param phaseKey       阶段 key（"enter" / "hesitate" / "buy" / "give-up"）
+     * @return 原始 MiniMessage 字符串
+     */
+    public String thoughtText(String personalityKey, String phaseKey) {
+        // 1. 指定性格
+        String key = "thought-display." + personalityKey + "." + phaseKey;
+        String text = messages.get(key);
+        if (text == null) {
+            text = langConfig.getString(key);
+        }
+
+        // 2. normal 兜底
+        if (text == null) {
+            String normalKey = "thought-display.normal." + phaseKey;
+            text = messages.get(normalKey);
+            if (text == null) {
+                text = langConfig.getString(normalKey);
+            }
+        }
+
+        // 3. 硬编码兜底（lang 整节被删时仍不抛异常）
+        if (text == null) {
+            text = switch (phaseKey) {
+                case "enter" -> "<i>思考中…</i>";
+                case "hesitate" -> "<i>犹豫不决…</i>";
+                case "buy" -> "<green>决定购买！</green>";
+                case "give-up" -> "<gray>算了，不买了</gray>";
+                default -> "<i>思考中…</i>";
+            };
+        }
+        return text;
+    }
+
+    /**
+     * 构建 Debug 后缀字符串（isDebug=true 时追加到 ENTER/HESITATE 文本末尾）。
+     *
+     * <p>模板来自 lang {@code thought-debug-suffix}，含 {@code {p}}/{@code {done}}/{@code {total}}
+     * 占位符。返回原始 MiniMessage 字符串（含前导空格）。</p>
+     *
+     * @param probability 购买概率（保留 2 位小数）
+     * @param rollsDone   已完成判定次数
+     * @param totalRolls  总判定次数
+     * @return Debug 后缀原始字符串
+     */
+    public String thoughtDebugSuffix(double probability, int rollsDone, int totalRolls) {
+        String template = getRaw("thought-debug-suffix");
+        return template.replace("{p}", String.format("%.2f", probability))
+                .replace("{done}", String.valueOf(rollsDone))
+                .replace("{total}", String.valueOf(totalRolls));
+    }
+
+    /**
      * 获取消息并解析为 Component。自动替换 {@code {prefix}} 占位符为 lang 中
      * {@code prefix} 键值。
      *

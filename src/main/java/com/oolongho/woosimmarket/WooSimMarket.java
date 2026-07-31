@@ -27,6 +27,7 @@ import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
+import com.oolongho.woosimmarket.visualize.ThoughtDisplayManager;
 import com.oolongho.woosimmarket.command.MainCommand;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -74,6 +75,7 @@ public class WooSimMarket extends JavaPlugin {
     private PersonalityManager personalityManager;
     private NpcManager npcManager;
     private ShelfDisplayManager shelfDisplayManager;
+    private ThoughtDisplayManager thoughtDisplayManager;
     private ShopRangeVisualizer shopRangeVisualizer;
 
     @Override
@@ -142,8 +144,11 @@ public class WooSimMarket extends JavaPlugin {
         npcSkinCache.preloadAsync(configLoader.getSkinNames());
         personalityManager = new PersonalityManager();
         personalityManager.load(configLoader.getPersonalitiesConfig());
+        // 10.6. 头顶思考展示管理器（依赖 ConfigLoader + Messages，NpcManager 注入）
+        thoughtDisplayManager = new ThoughtDisplayManager(this, configLoader, messages);
         npcManager = new NpcManager(this, shopManager, npcPacketSender, configLoader, messages,
-                npcSkinCache, marketManager, shelfDisplayManager, personalityManager, purchaseFormula);
+                npcSkinCache, marketManager, shelfDisplayManager, personalityManager, purchaseFormula,
+                thoughtDisplayManager);
         npcManager.start();
 
         // 12. 注册监听器
