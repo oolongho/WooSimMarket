@@ -32,6 +32,20 @@ withdraw-no-balance: "{prefix}<color:#F59E0B>Shop balance is 0, nothing to withd
 npc-stuck: "<color:#9CA3AF>NPC stuck and despawned.</color>"
 npc-purchased: "<color:#10B981>{npc} bought {item} for {price}.</color>"
 
+# normal personality has no prefix; only 12 extreme personalities define prefixes
+personality-prefix-generous: "<color:#a3b547>[Generous]</color> "
+personality-prefix-stingy: "<color:#a3b547>[Stingy]</color> "
+personality-prefix-trend-follower: "<color:#a3b547>[Trendy]</color> "
+personality-prefix-independent: "<color:#a3b547>[Independent]</color> "
+personality-prefix-impatient: "<color:#a3b547>[Impatient]</color> "
+personality-prefix-patient: "<color:#a3b547>[Patient]</color> "
+personality-prefix-rich: "<color:#a3b547>[Rich]</color> "
+personality-prefix-poor: "<color:#a3b547>[Poor]</color> "
+personality-prefix-homebody: "<color:#a3b547>[Homebody]</color> "
+personality-prefix-all-weather: "<color:#a3b547>[All-Weather]</color> "
+personality-prefix-early-bird: "<color:#a3b547>[Early Bird]</color> "
+personality-prefix-night-owl: "<color:#a3b547>[Night Owl]</color> "
+
 gui-shelf-title: "<color:#5EEAD4><bold>Shelf Management</bold></color>"
 gui-shelf-set-price: "<color:#F59E0B>Click to set price</color>"
 gui-shelf-current-price: "<color:#F59E0B>Current price: {price}</color>"

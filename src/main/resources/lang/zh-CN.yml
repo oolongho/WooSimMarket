@@ -39,6 +39,20 @@ withdraw-no-balance: "{prefix}<color:#F59E0B>商店余额为 0，无可提现。
 npc-stuck: "<color:#9CA3AF>NPC 卡住已销毁。</color>"
 npc-purchased: "<color:#10B981>{npc} 购买了 {item}，单价 {price}。</color>"
 
+# normal 性格无前缀，仅 12 种极端性格定义前缀
+personality-prefix-generous: "<color:#a3b547>[慷慨]</color> "
+personality-prefix-stingy: "<color:#a3b547>[吝啬]</color> "
+personality-prefix-trend-follower: "<color:#a3b547>[跟风]</color> "
+personality-prefix-independent: "<color:#a3b547>[独立]</color> "
+personality-prefix-impatient: "<color:#a3b547>[急躁]</color> "
+personality-prefix-patient: "<color:#a3b547>[耐心]</color> "
+personality-prefix-rich: "<color:#a3b547>[富裕]</color> "
+personality-prefix-poor: "<color:#a3b547>[贫穷]</color> "
+personality-prefix-homebody: "<color:#a3b547>[宅]</color> "
+personality-prefix-all-weather: "<color:#a3b547>[全天候]</color> "
+personality-prefix-early-bird: "<color:#a3b547>[早鸟]</color> "
+personality-prefix-night-owl: "<color:#a3b547>[夜猫]</color> "
+
 # GUI 标题与按钮（GUI 标题非聊天消息，不带 {prefix}）
 gui-shelf-title: "<color:#5EEAD4><bold>货架管理</bold></color>"
 gui-shelf-set-price: "<color:#F59E0B>点击设定价格</color>"

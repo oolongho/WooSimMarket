@@ -154,6 +154,24 @@ public class Messages {
     }
 
     /**
+     * 获取 NPC 性格前缀的原始 MiniMessage 字符串（含尾部空格分隔）。
+     *
+     * <p>由 {@link com.oolongho.woosimmarket.npc.NpcPacketSender} 在拼装 NPC 显示名时调用。
+     * normal 性格及缺失前缀均返回空字符串（不报错），调用方据此判断是否拼接前缀。</p>
+     *
+     * @param personalityKey 性格 key（如 "generous"、"stingy"）；"normal" 必然返回空串
+     * @return 前缀 MiniMessage 字符串（含尾部空格）；缺失或 normal 返回空串
+     */
+    public String getPersonalityPrefix(String personalityKey) {
+        String key = "personality-prefix-" + personalityKey;
+        String message = messages.get(key);
+        if (message == null) {
+            message = langConfig.getString(key);
+        }
+        return message != null ? message : "";
+    }
+
+    /**
      * 获取消息并解析为 Component。自动替换 {@code {prefix}} 占位符为 lang 中
      * {@code prefix} 键值。
      *

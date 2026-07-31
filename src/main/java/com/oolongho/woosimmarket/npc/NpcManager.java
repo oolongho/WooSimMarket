@@ -54,6 +54,7 @@ public class NpcManager {
     private final MarketManager marketManager;
     private final ShelfDisplayManager shelfDisplayManager;
     private final EquipmentProvider equipmentProvider;
+    private final PersonalityManager personalityManager;
 
     private final Map<UUID, SimNpc> npcsById = new ConcurrentHashMap<>();
     private final Map<String, List<UUID>> npcsByShop = new ConcurrentHashMap<>();
@@ -64,7 +65,8 @@ public class NpcManager {
     public NpcManager(WooSimMarket plugin, ShopManager shopManager,
                       NpcPacketSender packetSender, ConfigLoader configLoader,
                       Messages messages, NpcSkinCache skinCache,
-                      MarketManager marketManager, ShelfDisplayManager shelfDisplayManager) {
+                      MarketManager marketManager, ShelfDisplayManager shelfDisplayManager,
+                      PersonalityManager personalityManager) {
         this.plugin = plugin;
         this.shopManager = shopManager;
         this.packetSender = packetSender;
@@ -74,6 +76,7 @@ public class NpcManager {
         this.marketManager = marketManager;
         this.shelfDisplayManager = shelfDisplayManager;
         this.equipmentProvider = new EquipmentProvider(configLoader);
+        this.personalityManager = personalityManager;
     }
 
     /**
@@ -292,11 +295,13 @@ public class NpcManager {
         Location spawnLoc = generateSpawnLocation(shop, world);
 
         // 创建 NPC：初始状态 WAITING_FOR_PATH，不传 target（路径由异步 A* 寻路提供）
+        // 性格由 PersonalityManager 加权随机分配（spawn 时确定，不持久化）
         String name = pickName();
         SimNpc.SkinData skin = skinCache.getSkin(name);
+        PersonalityProfile personality = personalityManager.random();
         SimNpc npc = new SimNpc(
                 UUID.randomUUID(), name, skin, equipmentProvider.random(),
-                shop.id(), target.id(),
+                shop.id(), target.id(), personality,
                 spawnLoc,
                 configLoader.getNpcSpeed(),
                 configLoader.getNpcTargetReachDistance(),
@@ -309,8 +314,8 @@ public class NpcManager {
 
         if (configLoader.isDebug()) {
             plugin.getLogger().info(() -> String.format(
-                    "生成 NPC %s → 商店 %s → 货架 %s start=(%d,%d,%d) target=(%d,%d,%d)（等待寻路）",
-                    name, shop.id(), target.id(),
+                    "生成 NPC %s [性格=%s] → 商店 %s → 货架 %s start=(%d,%d,%d) target=(%d,%d,%d)（等待寻路）",
+                    name, personality.name(), shop.id(), target.id(),
                     spawnLoc.getBlockX(), spawnLoc.getBlockY(), spawnLoc.getBlockZ(),
                     target.x(), target.y(), target.z()));
         }

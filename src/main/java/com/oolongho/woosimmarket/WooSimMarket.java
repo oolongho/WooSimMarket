@@ -21,6 +21,7 @@ import com.oolongho.woosimmarket.market.MarketManager;
 import com.oolongho.woosimmarket.npc.NpcManager;
 import com.oolongho.woosimmarket.npc.NpcPacketSender;
 import com.oolongho.woosimmarket.npc.NpcSkinCache;
+import com.oolongho.woosimmarket.npc.PersonalityManager;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
@@ -69,6 +70,7 @@ public class WooSimMarket extends JavaPlugin {
     private MarketManager marketManager;
     private NpcPacketSender npcPacketSender;
     private NpcSkinCache npcSkinCache;
+    private PersonalityManager personalityManager;
     private NpcManager npcManager;
     private ShelfDisplayManager shelfDisplayManager;
     private ShopRangeVisualizer shopRangeVisualizer;
@@ -129,13 +131,15 @@ public class WooSimMarket extends JavaPlugin {
         marketManager.start();
 
         // 11. NPC 系统（纯发包，依赖 ShopManager + MarketManager 数据）
-        npcPacketSender = new NpcPacketSender(configLoader);
+        npcPacketSender = new NpcPacketSender(configLoader, messages);
         npcSkinCache = new NpcSkinCache(this, configLoader.getSkinCacheFile(),
                 configLoader.getSkinFetchTimeoutSeconds());
         npcSkinCache.load();
         npcSkinCache.preloadAsync(configLoader.getSkinNames());
+        personalityManager = new PersonalityManager();
+        personalityManager.load(configLoader.getPersonalitiesConfig());
         npcManager = new NpcManager(this, shopManager, npcPacketSender, configLoader, messages,
-                npcSkinCache, marketManager, shelfDisplayManager);
+                npcSkinCache, marketManager, shelfDisplayManager, personalityManager);
         npcManager.start();
 
         // 12. 注册监听器
@@ -195,6 +199,9 @@ public class WooSimMarket extends JavaPlugin {
     public void reload() {
         configLoader.reload();
         messages.reload();
+        if (personalityManager != null) {
+            personalityManager.reload(configLoader.getPersonalitiesConfig());
+        }
     }
 
     private void registerListeners() {
@@ -257,6 +264,10 @@ public class WooSimMarket extends JavaPlugin {
 
     public NpcPacketSender getNpcPacketSender() {
         return npcPacketSender;
+    }
+
+    public PersonalityManager getPersonalityManager() {
+        return personalityManager;
     }
 
     public ShelfDisplayManager getShelfDisplayManager() {

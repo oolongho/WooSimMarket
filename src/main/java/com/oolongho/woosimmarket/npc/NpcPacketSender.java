@@ -7,6 +7,7 @@ import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
 import com.mojang.datafixers.util.Pair;
 import com.oolongho.woosimmarket.config.ConfigLoader;
+import com.oolongho.woosimmarket.config.Messages;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
@@ -29,6 +30,10 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
+import io.papermc.paper.adventure.PaperAdventure;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
@@ -41,6 +46,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,6 +82,9 @@ public class NpcPacketSender {
     /** 移动包最大相对位移（方块），超过则降级为 Teleport。 */
     private static final double MAX_MOVE_DELTA = 7.0;
 
+    /** Minecraft 玩家名上限（GameProfile.name 长度限制）。 */
+    private static final int MC_NAME_LIMIT = 16;
+
     /** 每个 NPC 上次发送给各客户端的位置（entityId → playerUuid → location），用于计算相对位移。 */
     private final Map<Integer, Map<UUID, Location>> lastSentByNpc = new ConcurrentHashMap<>();
 
@@ -88,12 +97,30 @@ public class NpcPacketSender {
     /** 配置加载器，用于读取 skin-parts 位掩码。 */
     private final ConfigLoader configLoader;
 
+    /** 消息管理器，用于查询性格前缀（MiniMessage 字符串）。 */
+    private final Messages messages;
+
+    /** MiniMessage 解析器（前缀 → Component）。 */
+    private final MiniMessage miniMessage = MiniMessage.miniMessage();
+
+    /** 纯文本序列化器（剥离 MiniMessage 标签后取可见字符）。 */
+    private final PlainTextComponentSerializer plainText = PlainTextComponentSerializer.plainText();
+
     /** DATA_PLAYER_MODE_CUSTOMISATION 的 entity data id（构造时反射读取，失败为 -1 降级）。 */
     private final int playerModeCustomisationId;
 
-    public NpcPacketSender(ConfigLoader configLoader) {
+    /** DATA_CUSTOM_NAME 的 entity data id（构造时反射读取，失败为 -1 降级：不发自定义名标签）。 */
+    private final int customNameId;
+
+    /** DATA_CUSTOM_NAME_VISIBLE 的 entity data id（构造时反射读取，失败为 -1 降级）。 */
+    private final int customNameVisibleId;
+
+    public NpcPacketSender(ConfigLoader configLoader, Messages messages) {
         this.configLoader = configLoader;
-        this.playerModeCustomisationId = resolvePlayerModeCustomisationId();
+        this.messages = messages;
+        this.playerModeCustomisationId = resolveEntityDataId(Avatar.DATA_PLAYER_MODE_CUSTOMISATION);
+        this.customNameId = resolveEntityDataIdByName(net.minecraft.world.entity.Entity.class, "DATA_CUSTOM_NAME");
+        this.customNameVisibleId = resolveEntityDataIdByName(net.minecraft.world.entity.Entity.class, "DATA_CUSTOM_NAME_VISIBLE");
     }
 
     /**
@@ -104,10 +131,11 @@ public class NpcPacketSender {
      */
     public void spawn(Player player, SimNpc npc) {
         GameProfile profile = createProfile(npc);
+        Component displayName = buildDisplayName(npc);
         Location loc = npc.location();
 
-        // 1. 添加到 TAB 列表
-        sendPacket(player, createInfoAddPacket(profile));
+        // 1. 添加到 TAB 列表（携带性格前缀显示名，TAB 列表隐藏不影响显示名透传）
+        sendPacket(player, createInfoAddPacket(profile, displayName));
 
         // 2. 生成玩家实体（26.1+ 使用 ClientboundAddEntityPacket）
         sendPacket(player, new ClientboundAddEntityPacket(
@@ -122,7 +150,13 @@ public class NpcPacketSender {
             sendPacket(player, createSkinPartsPacket(npc.entityId(), configLoader.getNpcSkinParts()));
         }
 
-        // 3.5 发送随机装备（4 部位，头盔始终为空保留头部皮肤；全空时跳过）
+        // 3.5 设置自定义名标签（性格前缀 + baseName，含 MiniMessage 颜色）
+        //    反射失败或前缀缺失时跳过；GameProfile.name 已含纯文本前缀作为降级显示
+        if (customNameId >= 0 && customNameVisibleId >= 0 && !npc.personality().name().equals("normal")) {
+            sendPacket(player, createCustomNamePacket(npc.entityId(), displayName));
+        }
+
+        // 3.6 发送随机装备（4 部位，头盔始终为空保留头部皮肤；全空时跳过）
         if (!npc.equipment().isEmpty()) {
             sendPacket(player, createEquipmentPacket(npc.entityId(), npc.equipment()));
         }
@@ -299,19 +333,21 @@ public class NpcPacketSender {
     // ===== 内部方法 =====
 
     private GameProfile createProfile(SimNpc npc) {
+        // GameProfile.name 使用纯文本前缀+baseName（截断到 16 字符），作为 CustomName 反射失败时的降级显示
+        String displayName = buildPlainDisplayName(npc);
         SimNpc.SkinData skin = npc.skin();
         if (skin != null && skin.value() != null && !skin.value().isEmpty()) {
             Multimap<String, Property> multimap = HashMultimap.create();
             multimap.put("textures", new Property("textures", skin.value(), skin.signature()));
-            return new GameProfile(npc.uuid(), npc.name(), new PropertyMap(multimap));
+            return new GameProfile(npc.uuid(), displayName, new PropertyMap(multimap));
         }
-        return new GameProfile(npc.uuid(), npc.name());
+        return new GameProfile(npc.uuid(), displayName);
     }
 
-    private ClientboundPlayerInfoUpdatePacket createInfoAddPacket(GameProfile profile) {
+    private ClientboundPlayerInfoUpdatePacket createInfoAddPacket(GameProfile profile, Component displayName) {
         ClientboundPlayerInfoUpdatePacket.Entry entry = new ClientboundPlayerInfoUpdatePacket.Entry(
                 profile.id(), profile, false, 0, GameType.SURVIVAL,
-                null, false, 0, null);
+                PaperAdventure.asVanilla(displayName), false, 0, null);
         return new ClientboundPlayerInfoUpdatePacket(
                 EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER),
                 List.of(entry));
@@ -372,19 +408,139 @@ public class NpcPacketSender {
     }
 
     /**
-     * 反射读取 {@link Avatar#DATA_PLAYER_MODE_CUSTOMISATION} 的内部 id。
+     * 构造 NPC 显示名 Component（性格前缀 MiniMessage + baseName）。
+     *
+     * <p>前缀来自 lang 文件（{@code personality-prefix-{key}}，含尾部空格分隔，
+     * MiniMessage 格式，抹茶绿 #a3b547）。总可见字符数超过 {@value #MC_NAME_LIMIT}
+     * 时截断 baseName，前缀完整保留。normal 性格返回纯 baseName 字面 Component。</p>
+     *
+     * <p>解析失败时降级为 {@link #buildPlainDisplayName} 的字面 Component。</p>
+     *
+     * @param npc NPC
+     * @return 显示名 Component
+     */
+    private Component buildDisplayName(SimNpc npc) {
+        String baseName = npc.name();
+        String prefixMini = messages.getPersonalityPrefix(npc.personality().name());
+        if (prefixMini.isEmpty()) {
+            // normal 或缺失前缀：返回纯 baseName
+            return Component.text(baseName);
+        }
+        String truncatedBase = truncateBaseName(baseName, prefixMini);
+        try {
+            return miniMessage.deserialize(prefixMini + truncatedBase);
+        } catch (RuntimeException ex) {
+            // 前缀解析失败：降级为纯文本
+            return Component.text(stripMiniTokens(prefixMini) + truncatedBase);
+        }
+    }
+
+    /**
+     * 构造 NPC 纯文本显示名（用于 GameProfile.name，受 16 字符上限）。
+     *
+     * <p>MiniMessage 标签剥离后的前缀 + 截断后的 baseName，总长 ≤ 16。
+     * normal 性格返回纯 baseName。</p>
+     *
+     * @param npc NPC
+     * @return 纯文本显示名
+     */
+    private String buildPlainDisplayName(SimNpc npc) {
+        String baseName = npc.name();
+        String prefixMini = messages.getPersonalityPrefix(npc.personality().name());
+        if (prefixMini.isEmpty()) {
+            return baseName;
+        }
+        return stripMiniTokens(prefixMini) + truncateBaseName(baseName, prefixMini);
+    }
+
+    /**
+     * 截断 baseName 使前缀（纯文本）+ baseName 总长 ≤ {@value #MC_NAME_LIMIT}。
+     * 前缀完整保留，仅截断 baseName。
+     *
+     * @param baseName   原始 baseName
+     * @param prefixMini 前缀 MiniMessage 字符串
+     * @return 截断后的 baseName
+     */
+    private String truncateBaseName(String baseName, String prefixMini) {
+        int prefixLen = stripMiniTokens(prefixMini).length();
+        int maxBaseLen = Math.max(0, MC_NAME_LIMIT - prefixLen);
+        return baseName.length() > maxBaseLen ? baseName.substring(0, maxBaseLen) : baseName;
+    }
+
+    /**
+     * 剥离 MiniMessage 标签，返回纯可见文本。
+     *
+     * <p>解析 + 纯文本序列化两步：先 {@link MiniMessage#deserialize} 解析为 Component，
+     * 再 {@link PlainTextComponentSerializer#serialize} 输出纯文本。解析失败时降级为
+     * 正则去除 {@code <...>} 标签（覆盖简单颜色/装饰标签，前缀场景足够）。</p>
+     *
+     * @param input MiniMessage 字符串
+     * @return 纯文本
+     */
+    private String stripMiniTokens(String input) {
+        try {
+            return plainText.serialize(miniMessage.deserialize(input));
+        } catch (RuntimeException ex) {
+            return input.replaceAll("<[^>]+>", "");
+        }
+    }
+
+    /**
+     * 构造自定义名标签 metadata 包（DATA_CUSTOM_NAME + DATA_CUSTOM_NAME_VISIBLE）。
+     *
+     * <p>同时设置自定义名（含性格前缀 MiniMessage 颜色）和可见性为 true，
+     * 使 NPC 头顶显示带颜色的性格前缀。CustomName 在玩家实体上的支持依赖客户端版本，
+     * GameProfile.name 的纯文本前缀作为降级显示。</p>
+     *
+     * @param entityId    NPC entityId
+     * @param displayName 显示名 Component
+     * @return metadata 包
+     */
+    private ClientboundSetEntityDataPacket createCustomNamePacket(int entityId, Component displayName) {
+        net.minecraft.network.chat.Component nmsName = PaperAdventure.asVanilla(displayName);
+        SynchedEntityData.DataValue<Optional<net.minecraft.network.chat.Component>> name = new SynchedEntityData.DataValue<>(
+                customNameId, EntityDataSerializers.OPTIONAL_COMPONENT, Optional.of(nmsName));
+        SynchedEntityData.DataValue<Boolean> visible = new SynchedEntityData.DataValue<>(
+                customNameVisibleId, EntityDataSerializers.BOOLEAN, true);
+        return new ClientboundSetEntityDataPacket(entityId, List.of(name, visible));
+    }
+
+    /**
+     * 反射读取指定 {@link EntityDataAccessor} 的内部 id。
      *
      * <p>accessor 本身在 Paper 26.1+ 经 {@code paper.at} 已 public，但其 {@code id} 字段为
-     * 包级私有，需反射访问。构造时执行一次，失败返回 -1（降级：禁用 skin 外层），
-     * NPC 仍可正常工作，仅缺少帽/外套显示。</p>
+     * 包级私有，需反射访问。构造时执行一次，失败返回 -1（降级：跳过对应 metadata）。</p>
      *
+     * @param accessor entity data accessor
      * @return entity data id；反射失败返回 -1
      */
-    private static int resolvePlayerModeCustomisationId() {
+    private static int resolveEntityDataId(EntityDataAccessor<?> accessor) {
         try {
             Field idField = EntityDataAccessor.class.getDeclaredField("id");
             idField.setAccessible(true);
-            return idField.getInt(Avatar.DATA_PLAYER_MODE_CUSTOMISATION);
+            return idField.getInt(accessor);
+        } catch (ReflectiveOperationException e) {
+            return -1;
+        }
+    }
+
+    /**
+     * 反射读取指定类的静态 {@link EntityDataAccessor} 字段并解析其内部 id。
+     *
+     * <p>用于 {@code Entity.DATA_CUSTOM_NAME} 等包级/私有访问控制的 accessor 字段 ——
+     * Paper 26.1+ 仅对部分字段（如 {@code Avatar.DATA_PLAYER_MODE_CUSTOMISATION}）经
+     * access transformer 提升 public，其余仍需反射按名获取。失败返回 -1（降级）。</p>
+     *
+     * @param holderClass accessor 字段所在类
+     * @param fieldName   accessor 字段名
+     * @return entity data id；反射失败返回 -1
+     */
+    private static int resolveEntityDataIdByName(Class<?> holderClass, String fieldName) {
+        try {
+            Field field = holderClass.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            EntityDataAccessor<?> accessor = (EntityDataAccessor<?>) field.get(null);
+            return resolveEntityDataId(accessor);
         } catch (ReflectiveOperationException e) {
             return -1;
         }

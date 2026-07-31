@@ -24,6 +24,8 @@ public class ConfigLoader {
     private FileConfiguration config;
     /** 市场配置（独立文件 market.yml）。 */
     private FileConfiguration marketConfig;
+    /** NPC 性格配置（独立文件 personalities.yml）。 */
+    private FileConfiguration personalitiesConfig;
 
     // settings
     private boolean debug;
@@ -74,6 +76,7 @@ public class ConfigLoader {
         plugin.saveDefaultConfig();
         config = plugin.getConfig();
         loadMarketConfig();
+        loadPersonalitiesConfig();
         loadValues();
     }
 
@@ -86,6 +89,20 @@ public class ConfigLoader {
             plugin.saveResource("market.yml", false);
         }
         marketConfig = YamlConfiguration.loadConfiguration(marketFile);
+    }
+
+    /**
+     * 加载 personalities.yml（首次不存在则释放默认文件）。
+     *
+     * <p>风格与 {@link #loadMarketConfig} 一致：先 {@link File#exists()} 检查再
+     * {@code saveResource}，避免重复释放时的警告日志。</p>
+     */
+    private void loadPersonalitiesConfig() {
+        File file = new File(plugin.getDataFolder(), "personalities.yml");
+        if (!file.exists()) {
+            plugin.saveResource("personalities.yml", false);
+        }
+        personalitiesConfig = YamlConfiguration.loadConfiguration(file);
     }
 
     /**
@@ -144,6 +161,7 @@ public class ConfigLoader {
         plugin.reloadConfig();
         config = plugin.getConfig();
         loadMarketConfig();
+        loadPersonalitiesConfig();
         loadValues();
     }
 
@@ -289,6 +307,18 @@ public class ConfigLoader {
 
     public double getMarketGlobalMultiplier() {
         return marketGlobalMultiplier;
+    }
+
+    /**
+     * 获取 personalities.yml 配置（NPC 性格定义）。
+     *
+     * <p>由 {@link com.oolongho.woosimmarket.npc.PersonalityManager} 在 load/reload 时读取，
+     * 仅返回原始 {@link FileConfiguration}，性格解析与钳制由 PersonalityManager 负责。</p>
+     *
+     * @return personalities.yml 配置
+     */
+    public FileConfiguration getPersonalitiesConfig() {
+        return personalitiesConfig;
     }
 
     public List<String> getSkinNames() {

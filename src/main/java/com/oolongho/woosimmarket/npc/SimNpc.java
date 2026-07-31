@@ -38,6 +38,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>卡住判定：每 {@code stuckThresholdSeconds} 秒检查一次 XZ 位移，
  * 不足 {@code stuckThresholdDistance} 则判定卡住。</p>
  *
+ * <p>性格（{@link #personality}）：spawn 时由 {@link NpcManager} 调用
+ * {@link PersonalityManager#random()} 加权随机分配，生命周期内不变，不持久化。
+ * 本 spec（子系统 1）只存储数据，判别式留给后续子系统。</p>
+ *
  * @author oolongho
  */
 public class SimNpc {
@@ -96,6 +100,8 @@ public class SimNpc {
     private final Equipment equipment;
     private final String shopId;
     private final String shelfId;
+    /** NPC 性格（spawn 时按权重随机分配，生命周期内不变，不持久化）。 */
+    private final PersonalityProfile personality;
     private final long spawnTime;
 
     // 可变字段
@@ -113,7 +119,7 @@ public class SimNpc {
     private final double stuckThresholdDistance;
 
     public SimNpc(UUID uuid, String name, SkinData skin, Equipment equipment, String shopId, String shelfId,
-                  Location spawnLocation,
+                  PersonalityProfile personality, Location spawnLocation,
                   double speed, double reachDistance,
                   int stuckThresholdSeconds, double stuckThresholdDistance) {
         this.uuid = uuid;
@@ -123,6 +129,7 @@ public class SimNpc {
         this.equipment = equipment;
         this.shopId = shopId;
         this.shelfId = shelfId;
+        this.personality = personality;
         this.spawnTime = System.currentTimeMillis();
         this.location = spawnLocation.clone();
         this.path = null;
@@ -307,6 +314,15 @@ public class SimNpc {
 
     public String shelfId() {
         return shelfId;
+    }
+
+    /**
+     * 获取 NPC 性格（spawn 时确定，生命周期内不变）。
+     *
+     * @return 性格 profile
+     */
+    public PersonalityProfile personality() {
+        return personality;
     }
 
     public Location location() {
