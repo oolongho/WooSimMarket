@@ -79,6 +79,17 @@ npc:
       - "#FFA040"
       - "#A040FF"
 
+  # NPC 徘徊判定（到达货架后的多次决策，子系统 3）
+  deliberation:
+    # impatience=0（耐心）时的最大判定次数，也是所有性格的判定次数硬上限
+    # impatience=1（急躁）时仅 1 次。设为 1 可全局禁用徘徊（退化为单次 roll）
+    max-rolls: 5
+    # impatience=1（急躁）时的判定间隔（ticks，20t=1s）
+    # 仅对 rolls>1 的性格生效（首次 roll 始终即时触发）
+    interval-min-ticks: 20
+    # impatience=0（耐心）时的判定间隔（ticks）
+    interval-max-ticks: 60
+
 skin:
   # NPC 皮肤来源玩家名列表（Ashcon API 按名获取 skin）
   names:

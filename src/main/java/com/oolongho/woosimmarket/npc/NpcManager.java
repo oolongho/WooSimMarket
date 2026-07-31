@@ -4,6 +4,7 @@ import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.market.MarketManager;
+import com.oolongho.woosimmarket.market.PurchaseFormula;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.ShopManager;
@@ -33,10 +34,10 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>生成策略：定时任务每隔 {@code [spawnIntervalMin, spawnIntervalMax]} 秒触发，
  * 遍历所有商店，未达并发上限则生成 1 个 NPC，随机选择货架作为目标。</p>
  *
- * <p>购买判定：NPC 到达货架后按 {@code P = (BasePrice / UserPrice)^sensitivity × GlobalMult}
- * 概率判定。命中则扣库存、加 balance、记录市场购买、NPC 离开；未命中 NPC 直接离开。</p>
- *
- * <p>BasePrice 由 {@link MarketManager#getFinalBase} 动态计算（供需滑动窗口调价）。</p>
+ * <p>购买判定：NPC 到达货架后委托 {@link PurchaseFormula} 计算 5 因子概率
+ * （price/market/budget/weather/time），结果缓存后进入徘徊状态（DELIBERATING），
+ * 由 impatience 决定判定次数与间隔，多次 roll 任一命中即购买；命中或判定耗尽
+ * 则离开。P=0（硬不可能买）跳过徘徊直接离开。</p>
  *
  * @author oolongho
  */
@@ -52,6 +53,7 @@ public class NpcManager {
     private final Messages messages;
     private final NpcSkinCache skinCache;
     private final MarketManager marketManager;
+    private final PurchaseFormula purchaseFormula;
     private final ShelfDisplayManager shelfDisplayManager;
     private final EquipmentProvider equipmentProvider;
     private final PersonalityManager personalityManager;
@@ -66,7 +68,7 @@ public class NpcManager {
                       NpcPacketSender packetSender, ConfigLoader configLoader,
                       Messages messages, NpcSkinCache skinCache,
                       MarketManager marketManager, ShelfDisplayManager shelfDisplayManager,
-                      PersonalityManager personalityManager) {
+                      PersonalityManager personalityManager, PurchaseFormula purchaseFormula) {
         this.plugin = plugin;
         this.shopManager = shopManager;
         this.packetSender = packetSender;
@@ -77,6 +79,7 @@ public class NpcManager {
         this.shelfDisplayManager = shelfDisplayManager;
         this.equipmentProvider = new EquipmentProvider(configLoader);
         this.personalityManager = personalityManager;
+        this.purchaseFormula = purchaseFormula;
     }
 
     /**
@@ -124,6 +127,7 @@ public class NpcManager {
             switch (result) {
                 case MOVING -> packetSender.moveToNearby(npc, BROADCAST_RADIUS);
                 case REACHED -> handleReached(npc);
+                case ROLL_DUE -> handleRoll(npc);
                 case STUCK -> {
                     plugin.getLogger().info(() -> "NPC " + npc.name() + " 卡住，销毁");
                     despawnNpc(npc);
@@ -135,7 +139,12 @@ public class NpcManager {
     }
 
     /**
-     * NPC 到达货架：执行购买判定，然后让 NPC 离开。
+     * NPC 到达货架：计算购买概率并进入徘徊判定（子系统 3）。
+     *
+     * <p>流程：查 shelf → 算 P（{@link PurchaseFormula#calculate} 一次）→
+     * P&lt;=0 直接离开（硬不可能买，跳过徘徊）→ 否则按 impatience 计算
+     * rolls/interval → 调 {@link SimNpc#startDeliberation}。后续每次 roll 由
+     * {@link #handleRoll} 处理。</p>
      *
      * @param npc 到达的 NPC
      */
@@ -147,19 +156,89 @@ public class NpcManager {
             return;
         }
 
-        // 购买概率判定（BasePrice 由 MarketManager 动态计算）
+        // 购买概率判别式（5 因子，委托 PurchaseFormula，计算一次缓存于 SimNpc）
         String itemId = getItemName(shelf.itemStack());
         double userPrice = shelf.price();
-        double probability = calculateBuyProbability(itemId, userPrice);
-        double roll = ThreadLocalRandom.current().nextDouble();
+        double probability = purchaseFormula.calculate(
+                npc.personality(), itemId, userPrice, npc.location().getWorld());
 
-        if (roll < probability) {
-            // 购买成功
-            handlePurchase(npc, shelf, itemId);
+        // P=0 硬不可能买：跳过徘徊直接离开（避免不真实逗留 + 浪费 tick）
+        if (probability <= 0.0) {
+            npc.startLeaving();
+            return;
         }
 
-        // 无论购买与否，NPC 离开
-        npc.startLeaving();
+        // 按 impatience 计算判定次数与间隔（线性 lerp）
+        int rolls = computeRolls(npc.personality().impatience());
+        int interval = computeInterval(npc.personality().impatience());
+
+        // 进入徘徊状态（首次 roll 即时触发，下一 tick 即 ROLL_DUE）
+        npc.startDeliberation(rolls, interval, probability);
+    }
+
+    /**
+     * 执行一次徘徊判定 roll（由 tick() 在 {@link SimNpc.TickResult#ROLL_DUE} 时调用）。
+     *
+     * <p>流程：重检 {@code shelf.canSell()}（徘徊期间可能被买空/拆除）→
+     * 用缓存 P roll → 命中则 {@link #handlePurchase} + {@link SimNpc#startLeaving()}；
+     * 未命中且 {@code rollsDone >= totalRolls} 则 startLeaving；未命中且仍有余量
+     * 则返回（SimNpc 计时器已由 tick() 重置，自动推进下次 roll）。</p>
+     *
+     * @param npc 处于 DELIBERATING 状态的 NPC
+     */
+    private void handleRoll(SimNpc npc) {
+        Shelf shelf = shopManager.getShelf(npc.shelfId());
+        if (shelf == null || !shelf.canSell()) {
+            // 徘徊期间货架被买空/消失，立即离开
+            npc.startLeaving();
+            return;
+        }
+
+        double roll = ThreadLocalRandom.current().nextDouble();
+        if (roll < npc.deliberationProbability()) {
+            // 命中：购买并离开
+            String itemId = getItemName(shelf.itemStack());
+            handlePurchase(npc, shelf, itemId);
+            npc.startLeaving();
+            return;
+        }
+
+        // 未命中：判定耗尽则离开，否则等待下次 roll（计时器已由 SimNpc.tick 重置）
+        if (npc.deliberationRollsDone() >= npc.deliberationTotalRolls()) {
+            npc.startLeaving();
+        }
+    }
+
+    /**
+     * 由 impatience 线性映射判定次数。
+     *
+     * <p>{@code rolls = round(1 + (maxRolls − 1) × (1 − impatience))}，范围 [1, maxRolls]。
+     * impatience=1（急躁）→ 1 次；impatience=0（耐心）→ maxRolls 次。
+     * impatience 由 {@link PersonalityManager} 加载时钳制到 [0,1]，此处不再重复钳制。</p>
+     *
+     * @param impatience 性格冲动度 [0,1]
+     * @return 判定次数
+     */
+    private int computeRolls(double impatience) {
+        int maxRolls = configLoader.getNpcDeliberationMaxRolls();
+        double t = 1.0 - impatience;
+        return (int) Math.round(1 + (maxRolls - 1) * t);
+    }
+
+    /**
+     * 由 impatience 线性映射判定间隔（ticks）。
+     *
+     * <p>{@code interval = round(intervalMin + (intervalMax − intervalMin) × (1 − impatience))}。
+     * impatience=1 → intervalMin（快决）；impatience=0 → intervalMax（慢决）。</p>
+     *
+     * @param impatience 性格冲动度 [0,1]
+     * @return 判定间隔（ticks）
+     */
+    private int computeInterval(double impatience) {
+        int min = configLoader.getNpcDeliberationIntervalMinTicks();
+        int max = configLoader.getNpcDeliberationIntervalMaxTicks();
+        double t = 1.0 - impatience;
+        return (int) Math.round(min + (max - min) * t);
     }
 
     /**
@@ -203,31 +282,6 @@ public class NpcManager {
             plugin.getLogger().info(() -> String.format(
                     "NPC %s 购买了 %s x%d，单价 %.2f", npc.name(), itemId, purchased, shelf.price()));
         }
-    }
-
-    /**
-     * 计算购买概率。
-     *
-     * <p>公式：{@code P = (BasePrice / UserPrice)^sensitivity × GlobalMult}<br>
-     * BasePrice 由 {@link MarketManager#getFinalBase} 动态计算。</p>
-     *
-     * @param itemId   物品 ID（Material 枚举名）
-     * @param userPrice 玩家设定的价格
-     * @return 购买概率 [0, 1]
-     */
-    private double calculateBuyProbability(String itemId, double userPrice) {
-        if (userPrice <= 0 || !Double.isFinite(userPrice)) {
-            return 0;
-        }
-        double basePrice = marketManager.getFinalBase(itemId);
-        double sensitivity = marketManager.getItemPriceSensitivity(itemId);
-        double globalMult = configLoader.getMarketGlobalMultiplier();
-
-        double ratio = basePrice / userPrice;
-        double p = Math.pow(ratio, sensitivity) * globalMult;
-
-        // 钳制 [0, 1]
-        return Math.max(0, Math.min(1, p));
     }
 
     /**

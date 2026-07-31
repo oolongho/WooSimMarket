@@ -18,6 +18,7 @@ import com.oolongho.woosimmarket.listener.ChatListener;
 import com.oolongho.woosimmarket.listener.ChunkListener;
 import com.oolongho.woosimmarket.listener.PlayerListener;
 import com.oolongho.woosimmarket.market.MarketManager;
+import com.oolongho.woosimmarket.market.PurchaseFormula;
 import com.oolongho.woosimmarket.npc.NpcManager;
 import com.oolongho.woosimmarket.npc.NpcPacketSender;
 import com.oolongho.woosimmarket.npc.NpcSkinCache;
@@ -38,7 +39,7 @@ import java.sql.SQLException;
  * <p>装配顺序：ConfigLoader → Messages → DatabaseManager → DAOs →
  * CraftEngineHook → VaultHook → ShopManager（加载 DB 数据）→
  * PricingManager → EconomyManager → MarketManager（加载 items.yml + 启动桶滚动）→
- * NpcSkinCache（加载缓存 + 异步预加载）→ NpcPacketSender → NpcManager → 注册监听器 →
+ * NpcSkinCache（加载缓存 + 异步预加载）→ NpcPacketSender → PurchaseFormula → NpcManager → 注册监听器 →
  * 命令系统 → PlaceholderAPI 钩子。</p>
  *
  * <p>硬依赖 CraftEngine 不可用时禁用插件；软依赖 Vault/PlaceholderAPI 不可用时降级运行。</p>
@@ -130,6 +131,9 @@ public class WooSimMarket extends JavaPlugin {
         marketManager = new MarketManager(this, configLoader);
         marketManager.start();
 
+        // 10.5. 购买判别式（纯计算，依赖 MarketManager + ConfigLoader）
+        PurchaseFormula purchaseFormula = new PurchaseFormula(marketManager, configLoader);
+
         // 11. NPC 系统（纯发包，依赖 ShopManager + MarketManager 数据）
         npcPacketSender = new NpcPacketSender(configLoader, messages);
         npcSkinCache = new NpcSkinCache(this, configLoader.getSkinCacheFile(),
@@ -139,7 +143,7 @@ public class WooSimMarket extends JavaPlugin {
         personalityManager = new PersonalityManager();
         personalityManager.load(configLoader.getPersonalitiesConfig());
         npcManager = new NpcManager(this, shopManager, npcPacketSender, configLoader, messages,
-                npcSkinCache, marketManager, shelfDisplayManager, personalityManager);
+                npcSkinCache, marketManager, shelfDisplayManager, personalityManager, purchaseFormula);
         npcManager.start();
 
         // 12. 注册监听器

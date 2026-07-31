@@ -17,8 +17,8 @@ import java.util.Map;
  *
  * <p>核心公式：
  * <ul>
- *   <li>{@code Multiplier = TargetVolume / CurrentTotalPurchases}（钳制 [0.1, 5.0]）</li>
- *   <li>{@code FinalBase = StandardPrice × Multiplier^exponent}</li>
+ *   <li>{@code Multiplier = TargetVolume / CurrentTotalPurchases}（钳制 [0.1, 5.0]，见 {@link #getMultiplier}）</li>
+ *   <li>FinalBase 合成（StandardPrice × Multiplier^exponent）已迁移至 {@link PurchaseFormula}</li>
  * </ul></p>
  *
  * <p>滑动窗口：{@code bucketCount}（默认 72）个时间桶，每 {@code bucketMinutes}
@@ -113,26 +113,6 @@ public class MarketManager {
     }
 
     /**
-     * 获取指定物品的动态基准价（供 NPC 购买判定使用）。
-     *
-     * <p>公式：{@code FinalBase = StandardPrice × Multiplier^exponent}<br>
-     * 未在 items.yml 中定义的物品返回 {@link #DEFAULT_BASE_PRICE}。</p>
-     *
-     * @param itemId 物品 ID
-     * @return 动态基准价
-     */
-    public double getFinalBase(String itemId) {
-        ItemInfo info = itemInfos.get(itemId);
-        if (info == null) {
-            return DEFAULT_BASE_PRICE;
-        }
-        double multiplier = computeMultiplier(itemId);
-        // 物品级 market-sensitivity 覆盖全局 exponent
-        double exponent = info.marketSensitivity() >= 0 ? info.marketSensitivity() : multiplierExponent;
-        return info.standardPrice() * Math.pow(multiplier, exponent);
-    }
-
-    /**
      * 获取物品的价格敏感度（P 公式指数）。
      *
      * <p>优先返回 items.yml 的 per-item price-sensitivity，缺省（-1）返回全局 sensitivity。</p>
@@ -149,6 +129,37 @@ public class MarketManager {
     }
 
     /**
+     * 获取物品的市场敏感度（BasePrice 公式指数）。
+     *
+     * <p>优先返回 items.yml 的 per-item market-sensitivity，缺省（-1）返回全局
+     * {@code multiplier-exponent}。对称于 {@link #getItemPriceSensitivity}。</p>
+     *
+     * @param itemId 物品 ID
+     * @return 市场敏感度（BasePrice 指数）
+     */
+    public double getItemMarketSensitivity(String itemId) {
+        ItemInfo info = itemInfos.get(itemId);
+        if (info != null && info.marketSensitivity() >= 0) {
+            return info.marketSensitivity();
+        }
+        return configLoader.getMarketMultiplierExponent();
+    }
+
+    /**
+     * 获取物品标准价（items.yml 配置的公平价）。
+     *
+     * <p>未在 items.yml 中定义的物品返回 {@link #DEFAULT_BASE_PRICE}。
+     * 供 PurchaseFormula 的 budget 硬门与 basePrice 基准使用。</p>
+     *
+     * @param itemId 物品 ID
+     * @return 标准价
+     */
+    public double getStandardPrice(String itemId) {
+        ItemInfo info = itemInfos.get(itemId);
+        return info != null ? info.standardPrice() : DEFAULT_BASE_PRICE;
+    }
+
+    /**
      * 计算指定物品的市场倍率。
      *
      * <p>公式：{@code Multiplier = TargetVolume / CurrentTotalPurchases}（钳制 [min, max]）<br>
@@ -157,7 +168,7 @@ public class MarketManager {
      * @param itemId 物品 ID
      * @return 市场倍率 [multiplierMin, multiplierMax]
      */
-    private double computeMultiplier(String itemId) {
+    public double getMultiplier(String itemId) {
         ItemInfo info = itemInfos.get(itemId);
         if (info == null) {
             return 1.0;

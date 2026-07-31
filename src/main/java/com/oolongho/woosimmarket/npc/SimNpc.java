@@ -22,7 +22,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       tick 返回 {@link TickResult#IDLE}（不移动不发包）</li>
  *   <li>{@link State#MOVING}：沿 {@link #path} 路径点序列移动，每个路径点到达后
  *       切换下一个；全部走完返回 {@link TickResult#REACHED}（不切换 state，
- *       由 NpcManager 处理购买判定后调用 {@link #startLeaving()}）</li>
+ *       由 NpcManager 调用 {@link #startDeliberation()} 进入徘徊）</li>
+ *   <li>{@link State#DELIBERATING}：到达货架后原地站立，由 impatience 决定的
+ *       次数/间隔多次判定；到点返回 {@link TickResult#ROLL_DUE} 交 NpcManager roll，
+ *       命中或耗尽则由 NpcManager 调 {@link #startLeaving()}</li>
  *   <li>{@link State#LEAVING}：使用逆向 {@link #path} 返回，
  *       全部走完返回 {@link TickResult#DESPAWN}</li>
  * </ul></p>
@@ -78,8 +81,10 @@ public class SimNpc {
         STUCK,
         /** 已到达离开目标点，应销毁 */
         DESPAWN,
-        /** 非移动状态（等待路径计算） */
-        IDLE
+        /** 非移动状态（等待路径计算 / 徘徊未到判定点） */
+        IDLE,
+        /** 徘徊判定到点，请求 NpcManager 执行一次 roll */
+        ROLL_DUE
     }
 
     /** NPC 状态。 */
@@ -88,7 +93,9 @@ public class SimNpc {
         WAITING_FOR_PATH,
         /** 沿路径移动到货架 */
         MOVING,
-        /** 购买完成，沿逆向路径离开中 */
+        /** 到达货架，原地站立思考中（多次判定 + 计时器驱动） */
+        DELIBERATING,
+        /** 购买完成/判定耗尽，沿逆向路径离开中 */
         LEAVING
     }
 
@@ -117,6 +124,13 @@ public class SimNpc {
     private final double reachDistance;
     private final int stuckThresholdSeconds;
     private final double stuckThresholdDistance;
+
+    // 徘徊判定参数（DELIBERATING 状态，由 NpcManager.startDeliberation 初始化）
+    private int deliberationTotalRolls;
+    private int deliberationRollsDone;
+    private int deliberationTicksUntilNextRoll;
+    private int deliberationIntervalTicks;
+    private double deliberationProbability;
 
     public SimNpc(UUID uuid, String name, SkinData skin, Equipment equipment, String shopId, String shelfId,
                   PersonalityProfile personality, Location spawnLocation,
@@ -163,6 +177,31 @@ public class SimNpc {
     }
 
     /**
+     * 进入徘徊判定状态（DELIBERATING）。
+     *
+     * <p>由 NpcManager.handleReached 在 NPC 到达货架且 P>0 时调用。初始化判定
+     * 次数/间隔/缓存概率，切换到 {@link State#DELIBERATING}。首次 roll 即时
+     * 触发（{@code ticksUntilNextRoll=0}，下一 tick 即返回 {@link TickResult#ROLL_DUE}）。</p>
+     *
+     * <p>徘徊期间 NPC 原地不动，{@link #tick()} 在到点时返回 ROLL_DUE，由
+     * NpcManager 执行 roll 并决定后续（命中→startLeaving / 耗尽→startLeaving /
+     * 仍有余量→等待下次）。NpcManager 无需调用任何"重置计时器"方法——tick() 在
+     * 返回 ROLL_DUE 时已将 ticksUntilNextRoll 重置为 intervalTicks。</p>
+     *
+     * @param totalRolls   总判定次数（由 impatience 映射，&gt;=1）
+     * @param intervalTicks 后续判定间隔（ticks，首次即时）
+     * @param probability  缓存购买概率 [0,1]（PurchaseFormula.calculate 一次的结果）
+     */
+    public void startDeliberation(int totalRolls, int intervalTicks, double probability) {
+        this.deliberationTotalRolls = totalRolls;
+        this.deliberationRollsDone = 0;
+        this.deliberationIntervalTicks = intervalTicks;
+        this.deliberationTicksUntilNextRoll = 0;
+        this.deliberationProbability = probability;
+        this.state = State.DELIBERATING;
+    }
+
+    /**
      * 每 tick 调用：计算下一步位置并更新内部状态。
      *
      * <p>状态机：</p>
@@ -181,6 +220,9 @@ public class SimNpc {
      * @return tick 结果
      */
     public TickResult tick() {
+        if (state == State.DELIBERATING) {
+            return tickDeliberating();
+        }
         if (state != State.MOVING && state != State.LEAVING) {
             return TickResult.IDLE;
         }
@@ -273,6 +315,26 @@ public class SimNpc {
     }
 
     /**
+     * DELIBERATING 状态的 tick 逻辑：倒计时到点返回 ROLL_DUE，否则 IDLE。
+     *
+     * <p>到点时 {@code rollsDone++} 并将 {@code ticksUntilNextRoll} 重置为
+     * {@code intervalTicks}，返回 ROLL_DUE 交由 NpcManager 执行 roll。NpcManager
+     * 据命中/耗尽决定 startLeaving（state 变更后不再进入本方法）或等待下次。</p>
+     *
+     * @return ROLL_DUE（到点）或 IDLE（未到点）
+     */
+    private TickResult tickDeliberating() {
+        if (deliberationTicksUntilNextRoll > 0) {
+            deliberationTicksUntilNextRoll--;
+            return TickResult.IDLE;
+        }
+        // 到点：推进计数 + 重置计时器 + 请求 roll
+        deliberationRollsDone++;
+        deliberationTicksUntilNextRoll = deliberationIntervalTicks;
+        return TickResult.ROLL_DUE;
+    }
+
+    /**
      * 切换到离开状态：逆向原路径返回。
      *
      * <p>将 {@link #path} 反转（终点变起点），重置 {@link #waypointIndex} 为 0，
@@ -331,6 +393,21 @@ public class SimNpc {
 
     public State state() {
         return state;
+    }
+
+    /** 徘徊判定已完成次数（供 NpcManager.handleRoll 判定耗尽 + 子系统 4 展示进度）。 */
+    public int deliberationRollsDone() {
+        return deliberationRollsDone;
+    }
+
+    /** 徘徊判定总次数（供 NpcManager.handleRoll 判定耗尽 + 子系统 4 展示进度）。 */
+    public int deliberationTotalRolls() {
+        return deliberationTotalRolls;
+    }
+
+    /** 缓存的购买概率（handleReached 时由 PurchaseFormula.calculate 计算一次）。 */
+    public double deliberationProbability() {
+        return deliberationProbability;
     }
 
     public long spawnTime() {

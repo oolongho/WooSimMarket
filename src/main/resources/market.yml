@@ -3,14 +3,20 @@
 # 本文件控制 NPC 购买概率与市场基准价的计算参数。
 # 物品级覆盖见 items.yml（per-item price-sensitivity / market-sensitivity）。
 #
-# 【购买概率公式】
-#   P = (BasePrice / UserPrice) ^ sensitivity × global-multiplier
+# 【购买概率公式】（实现在 market/PurchaseFormula.java，单次 roll）
+#   ① budget 硬门：userPrice > personality.budget × standardPrice → P=0
+#   ② priceFactor = (basePrice / userPrice) ^ effectiveSensitivity
+#        effectiveSensitivity = getItemPriceSensitivity × personality.priceSensitivity
+#        effectiveExponent    = getItemMarketSensitivity × personality.marketSensitivity
+#        basePrice            = standardPrice × multiplier ^ effectiveExponent
+#   ③ weatherFactor = 1 − weatherSensitivity × (hasStorm ? 1 : 0)
+#   ④ timeFactor    = 1 + time-strength × (timePreference − 0.5) × 2 × (dayNess − 0.5)
+#        dayNess = (cos(2π × (time − 6000) / 24000) + 1) / 2   // 正午=1 半夜=0
+#   ⑤ P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × global-multiplier )
 #
-#   - BasePrice：市场基准价（受供需影响，见下公式）
-#   - UserPrice：玩家设定的售价
-#   - sensitivity：价格敏感度（>1 时玩家提价显著降低购买概率；
-#     <1 时提价影响减弱。稀有物品建议在 items.yml 降低此值）
-#   - global-multiplier：全局热度倍率（整体购买意愿缩放）
+#   - standardPrice/multiplier/敏感度：见 items.yml 与下方市场参数
+#   - personality 5 维度：见 personalities.yml（impatience 留给子系统 3）
+#   - 不钳制单个因子，仅钳制最终 P（允许低价/日间加成 >1 后相乘收敛）
 #
 # 【市场基准价公式】
 #   BasePrice = StandardPrice × Multiplier ^ exponent
@@ -44,3 +50,6 @@ market:
   bucket-minutes: 5
   # 全局热度倍率（整体购买意愿缩放，>1 更活跃）
   global-multiplier: 1.0
+  # 时间因子幅度（0=全局禁用时间影响；1.0=默认）
+  # dayNess 正午=1 半夜=0；timePreference 0=夜型 1=日型 0.5=中性（中性时 timeFactor恒=1）
+  time-strength: 1.0

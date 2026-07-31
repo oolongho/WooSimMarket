@@ -46,6 +46,9 @@ public class ConfigLoader {
     private double npcTargetReachDistance;
     private int npcSkinParts;
     private boolean pathfindingAvoidHazards;
+    private int npcDeliberationMaxRolls;
+    private int npcDeliberationIntervalMinTicks;
+    private int npcDeliberationIntervalMaxTicks;
 
     // market
     private double marketSensitivity;
@@ -55,6 +58,7 @@ public class ConfigLoader {
     private int marketBucketCount;
     private int marketBucketMinutes;
     private double marketGlobalMultiplier;
+    private double marketTimeStrength;
 
     // skin
     private List<String> skinNames;
@@ -131,6 +135,13 @@ public class ConfigLoader {
         npcSkinParts = config.getInt("npc.skin-parts", 0xFF);
         pathfindingAvoidHazards = config.getBoolean("npc.pathfinding-avoid-hazards", true);
 
+        // npc.deliberation（徘徊判定，子系统 3）
+        npcDeliberationMaxRolls = Math.max(1, config.getInt("npc.deliberation.max-rolls", 5));
+        npcDeliberationIntervalMinTicks = Math.max(1, config.getInt("npc.deliberation.interval-min-ticks", 20));
+        // 保证 max >= min，避免区间退化
+        npcDeliberationIntervalMaxTicks = Math.max(npcDeliberationIntervalMinTicks,
+                config.getInt("npc.deliberation.interval-max-ticks", 60));
+
         // market（从独立文件 market.yml 读取）
         marketSensitivity = Math.max(0.1, marketConfig.getDouble("market.sensitivity", 2.0));
         marketMultiplierMin = Math.max(0.001, marketConfig.getDouble("market.multiplier-min", 0.1));
@@ -140,6 +151,7 @@ public class ConfigLoader {
         marketBucketCount = Math.max(1, marketConfig.getInt("market.bucket-count", 72));
         marketBucketMinutes = Math.max(1, marketConfig.getInt("market.bucket-minutes", 5));
         marketGlobalMultiplier = Math.max(0.0, marketConfig.getDouble("market.global-multiplier", 1.0));
+        marketTimeStrength = Math.max(0.0, marketConfig.getDouble("market.time-strength", 1.0));
 
         // skin
         skinNames = config.getStringList("skin.names");
@@ -243,6 +255,21 @@ public class ConfigLoader {
         return pathfindingAvoidHazards;
     }
 
+    /** NPC 徘徊判定最大次数（impatience=0 时的判定次数，也是所有性格硬上限）。 */
+    public int getNpcDeliberationMaxRolls() {
+        return npcDeliberationMaxRolls;
+    }
+
+    /** NPC 徘徊判定间隔下限（impatience=1 时，ticks；20t=1s）。 */
+    public int getNpcDeliberationIntervalMinTicks() {
+        return npcDeliberationIntervalMinTicks;
+    }
+
+    /** NPC 徘徊判定间隔上限（impatience=0 时，ticks）。 */
+    public int getNpcDeliberationIntervalMaxTicks() {
+        return npcDeliberationIntervalMaxTicks;
+    }
+
     /** NPC 随机装备是否启用。 */
     public boolean isNpcEquipmentEnabled() {
         return config.getBoolean("npc.equipment.enabled", true);
@@ -307,6 +334,10 @@ public class ConfigLoader {
 
     public double getMarketGlobalMultiplier() {
         return marketGlobalMultiplier;
+    }
+
+    public double getMarketTimeStrength() {
+        return marketTimeStrength;
     }
 
     /**
