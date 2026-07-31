@@ -5,10 +5,8 @@ api-version: '1.21'
 author: oolongho
 description: A simulation shop plugin with packet NPC customers
 
-depend:
-  - CraftEngine
-
 softdepend:
+  - CraftEngine
   - Vault
   - PlaceholderAPI
 

@@ -43,7 +43,8 @@ import java.sql.SQLException;
  * NpcSkinCache（加载缓存 + 异步预加载）→ NpcPacketSender → PurchaseFormula → NpcManager → 注册监听器 →
  * 命令系统 → PlaceholderAPI 钩子。</p>
  *
- * <p>硬依赖 CraftEngine 不可用时禁用插件；软依赖 Vault/PlaceholderAPI 不可用时降级运行。</p>
+ * <p>软依赖 CraftEngine/Vault/PlaceholderAPI，任一不可用时降级运行：
+ * CraftEngine 缺失则用原版方块模式（cash-register/shelf 配置兜底为 EMERALD_BLOCK/CHISELED_BOOKSHELF）。</p>
  *
  * @author oolongho
  */
