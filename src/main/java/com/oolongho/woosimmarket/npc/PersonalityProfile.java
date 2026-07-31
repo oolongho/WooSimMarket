@@ -32,7 +32,7 @@ package com.oolongho.woosimmarket.npc;
  * {@code impatience}/{@code weatherSensitivity}/{@code timePreference} 钳制到 [0,1]，
  * 其余维度钳制到 ≥0。</p>
  *
- * @param name               性格 key（如 "normal"、"generous"），对应 personalities.yml 中的 key
+ * @param name               性格 key（如 "normal"、"generous"），对应 npc.yml 中 personalities 节的 key
  * @param weight             spawn 权重（相对值，weight / totalWeight 为分配概率）；≤0 不参与随机
  * @param priceSensitivity   价格敏感度倍率（≥0）
  * @param marketSensitivity  购买动量敏感度倍率（≥0）

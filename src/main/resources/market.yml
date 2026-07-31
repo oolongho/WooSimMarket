@@ -1,34 +1,69 @@
-# ===== WooSimMarket 市场经济配置 =====
+# WooSimMarket 市场经济配置
 #
-# 本文件控制 NPC 购买概率计算参数。
-# 物品级覆盖见 items.yml（per-item price-sensitivity）。
+# NPC 购买概率 P 由 6 个因子相乘得出（最终钳制到 [0, 1]）：
 #
-# 【购买概率公式】（实现在 market/PurchaseFormula.java，单次 roll）
-#   ① budget 硬门：userPrice > personality.budget × standardPrice → P=0
-#   ② priceFactor = (standardPrice / userPrice) ^ effectiveSensitivity
-#        effectiveSensitivity = getItemPriceSensitivity × personality.priceSensitivity
-#   ③ weatherFactor = 1 − weatherSensitivity × (hasStorm ? 1 : 0)
-#   ④ timeFactor    = 1 + time-strength × (timePreference − 0.5) × 2 × (dayNess − 0.5)
-#        dayNess = (cos(2π × (time − 6000) / 24000) + 1) / 2   // 正午=1 半夜=0
-#   ⑤ marketFactor = 1 + momentum-strength × (momentum − 0.5) × 2 × market-sensitivity
-#        momentum = MarketManager.getPurchaseMomentum(itemId)  // EMA∈[0,1], 默认0.5
-#   ⑥ P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × marketFactor × global-multiplier )
+#   P = 全局意愿 × 价格因子 × 天气因子 × 时间因子 × 市场因子
 #
-#   - standardPrice / price-sensitivity：见 items.yml 与下方市场参数
-#   - personality 5 维度参与 P（impatience 用于子系统 3，market-sensitivity 参与动量因子⑤）
-#   - 不钳制单个因子，仅钳制最终 P（允许低价/日间加成 >1 后相乘收敛）
+# 因子说明：
+#   - 预算：售价超过 NPC 预算上限 → P=0（直接拒绝）
+#   - 价格因子：售价越低，购买意愿越高（price-sensitivity）
+#   - 天气因子：坏天气降低购买意愿（weather-sensitivity）
+#   - 时间因子：NPC 在偏好时段购买意愿更高（time-preference）
+#   - 市场因子：近期热销品购买意愿更高，冷门品更低（market-sensitivity）
+#   - 全局意愿：所有概率的最终缩放系数（global-multiplier）
+#
+# 典型价位示例（normal 性格、白天、无坏天气、市场动量=0.5）：
+#   公平价（售价=标准价）：P ≈ 0.30（明显犹豫）
+#   8 折（售价=标准价×0.8）：P ≈ 0.47（倾向购买）
+#   半价（售价=标准价×0.5）：P = 1.00（必买，钳制上限）
+#
+# 标准价/物品级敏感度见 items.yml；性格 5 维度见 npc.yml
 
 market:
+  # 全局购买意愿
+  global-multiplier: 0.3
   # 价格敏感度（P 公式指数，>1 提价显著降概率）
   sensitivity: 2.0
-  # 全局购买意愿缩放（P 公式最终乘数）。<1 让公平价也产生犹豫：
-  #   0.6 → 公平价 P≈0.6（犹豫），8折 P≈0.94（倾向买），半价 P=1.0（必买）
-  #   1.0 → 公平价 P=1.0（必买，无犹豫）
-  global-multiplier: 0.6
-  # 时间因子幅度（0=全局禁用时间影响；1.0=默认）
-  # dayNess 正午=1 半夜=0；timePreference 0=夜型 1=日型 0.5=中性（中性时 timeFactor恒=1）
+  # 时间因子幅度（0=全局禁用时间影响；默认1.0）
   time-strength: 1.0
-  # 购买动量强度（marketFactor 幅度，0=禁用动量）
-  # trend-follower(1.8) 在热销品(momentum=1.0)上 +54%，冷门品(momentum=0.0) 上 -54%
-  # independent(0.3) 仅 ±5%，几乎不受影响。推荐 [0, 0.5]
+  # 市场因子幅度（0=禁用市场动量影响；默认0.3）
+  # trend-follower[跟风]性格 (1.8) 在热销品(momentum=1.0)上 +54%，冷门品(momentum=0.0) 上 -54%
+  # independent[独立]性格 (0.3) 仅 ±5%，几乎不受影响。
+  # 推荐 [0, 0.5]
   momentum-strength: 0.3
+
+# 商店配置
+shop:
+  # 收银机绑定货架的半径，货架必须在此半径内才可绑定
+  bind-radius: 16
+  # 每个玩家可拥有的商店上限
+  limit: 1
+  # 两个收银机之间的最小距离，防止商店互相覆盖
+  min-distance: 8
+  # 收银台方块
+  # CE的namespace:path，或原版Material名
+  # 留空默认 EMERALD_BLOCK
+  cash-register-block: simmarket:cash_register
+  # 货架方块
+  # 留空默认 CHISELED_BOOKSHELF
+  shelf-block: simmarket:shelf
+
+# 货架全息展示
+shelf-display:
+  enabled: true
+  # Y 偏移（1.0 = 方块顶部）
+  item-offset-y: 1.2
+
+# 收银台全息展示（店主头颅 + 店名文字）
+shop-display:
+  # 是否启用
+  enabled: true
+  # 店主头颅 Y 偏移（相对收银台方块底面，1.5 = 方块顶部上方 0.5 格）
+  head-y-offset: 1.8
+  # 店名文字 Y 偏移（在头颅下方，1.2 = 方块顶部上方 0.2 格）
+  name-y-offset: 1.2
+  # 店名文字颜色
+  text-color: "#a3b547"
+
+# 商店范围粒子持续秒数
+range-duration-seconds: 10

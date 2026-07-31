@@ -149,7 +149,7 @@ public class WooSimMarket extends JavaPlugin {
         npcSkinCache.load();
         npcSkinCache.preloadAsync(configLoader.getSkinNames());
         personalityManager = new PersonalityManager();
-        personalityManager.load(configLoader.getPersonalitiesConfig());
+        personalityManager.load(configLoader.getNpcConfig());
         // 10.6. 头顶思考展示管理器（依赖 ConfigLoader + Messages，NpcManager 注入）
         thoughtDisplayManager = new ThoughtDisplayManager(this, configLoader, messages);
         npcManager = new NpcManager(this, shopManager, npcPacketSender, configLoader, messages,
@@ -219,7 +219,7 @@ public class WooSimMarket extends JavaPlugin {
         configLoader.reload();
         messages.reload();
         if (personalityManager != null) {
-            personalityManager.reload(configLoader.getPersonalitiesConfig());
+            personalityManager.reload(configLoader.getNpcConfig());
         }
     }
 

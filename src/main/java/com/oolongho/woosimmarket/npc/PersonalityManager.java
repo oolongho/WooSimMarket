@@ -11,7 +11,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 /**
- * NPC 性格管理器 —— 加载 personalities.yml、加权随机分配性格。
+ * NPC 性格管理器 —— 加载 npc.yml 的 personalities 节、加权随机分配性格。
  *
  * <p>线程模型：{@link #load} 和 {@link #reload} 在主线程 onEnable/reload 时调用，
  * {@link #random} 由 {@link NpcManager#trySpawnNpc} 在主线程 spawn 任务中调用。
@@ -42,9 +42,9 @@ public class PersonalityManager {
     private static final double DEFAULT_WEATHER_SENSITIVITY = 0.3;
     private static final double DEFAULT_TIME_PREFERENCE = 0.5;
 
-    /** 硬编码 normal 兜底（无任何性格时返回此值，不抛异常）。权重镜像 personalities.yml 的 normal.weight=50 保持语义一致。 */
+    /** 硬编码 normal 兜底（无任何性格时返回此值，不抛异常）。权重镜像 npc.yml 的 normal.weight=10 保持语义一致。 */
     private static final PersonalityProfile NORMAL_FALLBACK = new PersonalityProfile(
-            "normal", 50.0,
+            "normal", 10.0,
             DEFAULT_PRICE_SENSITIVITY, DEFAULT_MARKET_SENSITIVITY,
             DEFAULT_IMPATIENCE, DEFAULT_BUDGET,
             DEFAULT_WEATHER_SENSITIVITY, DEFAULT_TIME_PREFERENCE);
@@ -72,7 +72,7 @@ public class PersonalityManager {
      *   <li>维度缺失时使用默认值</li>
      * </ul>
      *
-     * @param config personalities.yml 配置
+     * @param config npc.yml 配置
      */
     public void load(FileConfiguration config) {
         if (config == null) {
@@ -136,7 +136,7 @@ public class PersonalityManager {
     /**
      * 重载：清空 map 后重新加载。
      *
-     * @param config personalities.yml 配置
+     * @param config npc.yml 配置
      */
     public void reload(FileConfiguration config) {
         profileMap.clear();

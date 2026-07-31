@@ -2,15 +2,18 @@
 
 prefix: "<white>[</white><color:#5EEAD4>WooSimMarket</color><white>]</white> "
 
+# General
 no-permission: "{prefix}<color:#EF4444>You do not have permission to do this.</color>"
 player-only: "{prefix}<color:#EF4444>This command can only be run by a player.</color>"
 config-reloaded: "{prefix}<color:#10B981>Configuration reloaded.</color>"
 
+# Shop
 shop-created: "{prefix}<color:#10B981>Shop created.</color>"
 shop-limit-reached: "{prefix}<color:#EF4444>Shop limit reached, cannot create more.</color>"
 shop-too-close: "{prefix}<color:#EF4444>Too close to another cash register to create.</color>"
 shop-not-found: "{prefix}<color:#EF4444>Shop not found.</color>"
 
+# Shelf
 shelf-bound: "{prefix}<color:#10B981>Shelf bound to shop. Please open the shelf management UI to enable it.</color>"
 shelf-too-far: "{prefix}<color:#EF4444>Shelf is too far from the cash register to bind.</color>"
 shelf-not-found: "{prefix}<color:#EF4444>Shelf not found.</color>"
@@ -25,10 +28,12 @@ price-input-prompt: "{prefix}<color:#F59E0B>Please type a price in chat (type ca
 price-input-invalid: "{prefix}<color:#EF4444>Invalid price input, please enter a positive number.</color>"
 price-input-cancelled: "{prefix}<color:#9CA3AF>Pricing cancelled.</color>"
 
+# Withdraw
 withdraw-success: "{prefix}<color:#10B981>Withdrew {amount} to your account.</color>"
 withdraw-failed: "{prefix}<color:#EF4444>Withdrawal failed, please try again later.</color>"
 withdraw-no-balance: "{prefix}<color:#F59E0B>Shop balance is 0, nothing to withdraw.</color>"
 
+# NPC (passive notifications, no {prefix})
 npc-stuck: "<color:#9CA3AF>NPC stuck and despawned.</color>"
 npc-purchased: "<color:#10B981>{npc} bought {item} for {price}.</color>"
 
@@ -48,18 +53,22 @@ personality-prefix-all-weather: "<color:#a3b547>[All-Weather]</color> "
 personality-prefix-early-bird: "<color:#a3b547>[Early Bird]</color> "
 personality-prefix-night-owl: "<color:#a3b547>[Night Owl]</color> "
 
-gui-shelf-title: "<color:#5EEAD4><bold>Shelf Management</bold></color>"
+# GUI titles and buttons (no {prefix})
+gui-shelf-title: "<black><bold>Shelf Management</bold></black>"
 gui-shelf-set-price: "<color:#F59E0B>Click to set price</color>"
 gui-shelf-current-price: "<color:#F59E0B>Current price: {price}</color>"
 gui-shelf-enabled: "<color:#10B981>Enabled</color>"
 gui-shelf-disabled: "<color:#EF4444>Disabled</color>"
 gui-shelf-toggle-lore: "<color:#9CA3AF>Click to toggle status</color>"
-gui-shop-title: "<color:#5EEAD4><bold>Shop Panel</bold></color>"
+gui-shop-title: "<black><bold>Shop Panel</bold></black>"
 gui-shop-info: "<color:#5EEAD4>Shop Info</color>"
 gui-shop-withdraw: "<color:#10B981>Click to withdraw</color>"
 gui-shop-refresh: "<color:#9CA3AF>Click to refresh</color>"
 gui-shop-balance: "<color:#F59E0B>Current balance: {balance}</color>"
+gui-shop-billboard-name: "{owner}'s Shop"
+gui-shop-shelves: "<color:#F59E0B>Shelves: </color><color:#10B981>{enabled}</color><color:#F59E0B>/{total}</color>"
 
+# Commands
 command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket Commands</bold></color>"
 command-give-success: "{prefix}<color:#10B981>Gave {item} to {player}.</color>"
 command-info: "{prefix}<color:#9CA3AF>Shop info: ID={id} balance={balance}</color>"

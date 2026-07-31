@@ -23,6 +23,9 @@ import org.bukkit.util.Transformation;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
+
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -144,10 +147,11 @@ public class ShopDisplayManager {
             headItem.setItemMeta(skullMeta);
         }
         ItemDisplay itemDisplay = world.spawn(headLoc, ItemDisplay.class, entity -> {
-            entity.setBillboard(Display.Billboard.CENTER);
+            // VERTICAL：仅水平旋转朝向玩家，垂直方向固定（头颅不上下俯仰）
+            entity.setBillboard(Display.Billboard.VERTICAL);
             entity.setTransformation(new Transformation(
                     new Vector3f(),
-                    new Quaternionf(),
+                    new Quaternionf().rotateY((float) Math.PI),
                     new Vector3f(DISPLAY_SCALE, DISPLAY_SCALE, DISPLAY_SCALE),
                     new Quaternionf()));
             entity.setItemStack(headItem);
@@ -159,7 +163,15 @@ public class ShopDisplayManager {
                 shop.x() + 0.5, shop.y() + configLoader.getShopDisplayNameYOffset(), shop.z() + 0.5);
         TextDisplay textDisplay = world.spawn(nameLoc, TextDisplay.class, entity -> {
             entity.setBillboard(Display.Billboard.CENTER);
-            entity.text(messages.get("gui-shop-billboard-name", "owner", ownerName));
+            // 读取配置的店名颜色
+            String textColorHex = configLoader.getShopDisplayTextColor();
+            TextColor textColor = TextColor.fromHexString(textColorHex);
+            // 店名文本（语言文件提供纯文本模板，颜色由配置控制）
+            Component nameComponent = messages.get("gui-shop-billboard-name", "owner", ownerName);
+            if (textColor != null) {
+                nameComponent = nameComponent.color(textColor);
+            }
+            entity.text(nameComponent);
             markDisplayEntity(entity, shop.id());
         });
 

@@ -24,10 +24,10 @@ public class ConfigLoader {
 
     private final WooSimMarket plugin;
     private FileConfiguration config;
-    /** 市场配置（独立文件 market.yml）。 */
+    /** 市场配置（独立文件 market.yml，含 market/shop/shelf-display/shop-display）。 */
     private FileConfiguration marketConfig;
-    /** NPC 性格配置（独立文件 personalities.yml）。 */
-    private FileConfiguration personalitiesConfig;
+    /** NPC 配置（独立文件 npc.yml，含 npc/skin/thought-display/personalities）。 */
+    private FileConfiguration npcConfig;
 
     // settings
     private boolean debugPurchase;
@@ -69,7 +69,7 @@ public class ConfigLoader {
     // database
     private String databaseFile;
 
-    // visualization.thought-display（头顶思考展示，子系统 4）
+    // thought-display（头顶思考展示，子系统 4）
     private boolean thoughtDisplayEnabled;
     private double thoughtDisplayYOffset;
     private int thoughtDisplayFlashDurationTicks;
@@ -78,7 +78,7 @@ public class ConfigLoader {
     private boolean thoughtDisplayShadow;
     private boolean thoughtDisplaySeeThrough;
 
-    // visualization.shop-display（收银台全息展示）
+    // shop-display（收银台全息展示）
     private boolean shopDisplayEnabled;
     private double shopDisplayHeadYOffset;
     private double shopDisplayNameYOffset;
@@ -95,7 +95,7 @@ public class ConfigLoader {
         plugin.saveDefaultConfig();
         config = plugin.getConfig();
         loadMarketConfig();
-        loadPersonalitiesConfig();
+        loadNpcConfig();
         loadValues();
     }
 
@@ -111,17 +111,26 @@ public class ConfigLoader {
     }
 
     /**
-     * 加载 personalities.yml（首次不存在则释放默认文件）。
+     * 加载 npc.yml（首次不存在则释放默认文件）。
      *
      * <p>风格与 {@link #loadMarketConfig} 一致：先 {@link File#exists()} 检查再
      * {@code saveResource}，避免重复释放时的警告日志。</p>
+     *
+     * <p>合并自原 personalities.yml（NPC/skin/thought-display/personalities 四节），
+     * 若检测到旧 personalities.yml 文件则提示管理员删除。</p>
      */
-    private void loadPersonalitiesConfig() {
-        File file = new File(plugin.getDataFolder(), "personalities.yml");
-        if (!file.exists()) {
-            plugin.saveResource("personalities.yml", false);
+    private void loadNpcConfig() {
+        File npcFile = new File(plugin.getDataFolder(), "npc.yml");
+        if (!npcFile.exists()) {
+            plugin.saveResource("npc.yml", false);
         }
-        personalitiesConfig = YamlConfiguration.loadConfiguration(file);
+        npcConfig = YamlConfiguration.loadConfiguration(npcFile);
+
+        // 旧文件检测：personalities.yml 已合并到 npc.yml
+        File oldFile = new File(plugin.getDataFolder(), "personalities.yml");
+        if (oldFile.exists()) {
+            plugin.getLogger().warning("旧文件 personalities.yml 已合并到 npc.yml，可安全删除。");
+        }
     }
 
     /**
@@ -134,30 +143,30 @@ public class ConfigLoader {
         debugGeneral = config.getBoolean("settings.debug.general", false);
         language = config.getString("settings.language", "zh-CN");
 
-        // shop
-        shopBindRadius = Math.max(1, config.getInt("shop.bind-radius", 16));
-        shopLimit = Math.max(1, config.getInt("shop.limit", 1));
-        shopMinDistance = Math.max(0.0, config.getDouble("shop.min-distance", 8.0));
+        // shop（从 market.yml 读取）
+        shopBindRadius = Math.max(1, marketConfig.getInt("shop.bind-radius", 16));
+        shopLimit = Math.max(1, marketConfig.getInt("shop.limit", 1));
+        shopMinDistance = Math.max(0.0, marketConfig.getDouble("shop.min-distance", 8.0));
 
-        // npc
-        npcSpawnIntervalMin = Math.max(1, config.getInt("npc.spawn-interval-min", 30));
+        // npc（从 npc.yml 读取）
+        npcSpawnIntervalMin = Math.max(1, npcConfig.getInt("npc.spawn-interval-min", 30));
         // 保证 max >= min，避免随机区间退化
-        npcSpawnIntervalMax = Math.max(npcSpawnIntervalMin, config.getInt("npc.spawn-interval-max", 60));
-        npcMaxConcurrent = Math.max(1, config.getInt("npc.max-concurrent", 3));
-        npcStuckThresholdSeconds = Math.max(1, config.getInt("npc.stuck-threshold-seconds", 15));
-        npcStuckThresholdDistance = Math.max(0.1, config.getDouble("npc.stuck-threshold-distance", 5.0));
-        npcDespawnDistance = Math.max(1.0, config.getDouble("npc.despawn-distance", 32.0));
-        npcTargetReachDistance = Math.max(0.1, config.getDouble("npc.target-reach-distance", 1.5));
+        npcSpawnIntervalMax = Math.max(npcSpawnIntervalMin, npcConfig.getInt("npc.spawn-interval-max", 60));
+        npcMaxConcurrent = Math.max(1, npcConfig.getInt("npc.max-concurrent", 3));
+        npcStuckThresholdSeconds = Math.max(1, npcConfig.getInt("npc.stuck-threshold-seconds", 15));
+        npcStuckThresholdDistance = Math.max(0.1, npcConfig.getDouble("npc.stuck-threshold-distance", 5.0));
+        npcDespawnDistance = Math.max(1.0, npcConfig.getDouble("npc.despawn-distance", 32.0));
+        npcTargetReachDistance = Math.max(0.1, npcConfig.getDouble("npc.target-reach-distance", 1.5));
         // YAML 不支持 0xFF 字面量，配置文件用十进制 255；此处 0xFF 仅作 getInt 默认值
-        npcSkinParts = config.getInt("npc.skin-parts", 0xFF);
-        pathfindingAvoidHazards = config.getBoolean("npc.pathfinding-avoid-hazards", true);
+        npcSkinParts = npcConfig.getInt("npc.skin-parts", 0xFF);
+        pathfindingAvoidHazards = npcConfig.getBoolean("npc.pathfinding-avoid-hazards", true);
 
         // npc.deliberation（徘徊判定，子系统 3）
-        npcDeliberationMaxRolls = Math.max(1, config.getInt("npc.deliberation.max-rolls", 5));
-        npcDeliberationIntervalMinTicks = Math.max(1, config.getInt("npc.deliberation.interval-min-ticks", 20));
+        npcDeliberationMaxRolls = Math.max(1, npcConfig.getInt("npc.deliberation.max-rolls", 5));
+        npcDeliberationIntervalMinTicks = Math.max(1, npcConfig.getInt("npc.deliberation.interval-min-ticks", 20));
         // 保证 max >= min，避免区间退化
         npcDeliberationIntervalMaxTicks = Math.max(npcDeliberationIntervalMinTicks,
-                config.getInt("npc.deliberation.interval-max-ticks", 60));
+                npcConfig.getInt("npc.deliberation.interval-max-ticks", 60));
 
         // market（从独立文件 market.yml 读取）
         marketSensitivity = Math.max(0.1, marketConfig.getDouble("market.sensitivity", 2.0));
@@ -165,38 +174,38 @@ public class ConfigLoader {
         marketTimeStrength = Math.max(0.0, marketConfig.getDouble("market.time-strength", 1.0));
         marketMomentumStrength = Math.max(0.0, marketConfig.getDouble("market.momentum-strength", 0.3));
 
-        // skin
-        skinNames = config.getStringList("skin.names");
+        // skin（从 npc.yml 读取）
+        skinNames = npcConfig.getStringList("skin.names");
         if (skinNames.isEmpty()) {
             skinNames = new ArrayList<>(List.of("Notch", "jeb_"));
         }
-        skinCacheFile = config.getString("skin.cache-file", "data/skins.json");
-        skinFetchTimeoutSeconds = Math.max(1, config.getInt("skin.fetch-timeout-seconds", 10));
-        skinFallback = config.getString("skin.fallback", "STEVE");
+        skinCacheFile = npcConfig.getString("skin.cache-file", "data/skins.json");
+        skinFetchTimeoutSeconds = Math.max(1, npcConfig.getInt("skin.fetch-timeout-seconds", 10));
+        skinFallback = npcConfig.getString("skin.fallback", "STEVE");
 
         // database
         databaseFile = config.getString("database.file", "data/woosimmarket.db");
 
-        // visualization.thought-display（头顶思考展示，子系统 4）
-        thoughtDisplayEnabled = config.getBoolean("visualization.thought-display.enabled", true);
-        thoughtDisplayYOffset = Math.max(0.0, config.getDouble("visualization.thought-display.y-offset", 2.3));
-        thoughtDisplayFlashDurationTicks = Math.max(1, config.getInt("visualization.thought-display.flash-duration-ticks", 40));
+        // thought-display（头顶思考展示，子系统 4；从 npc.yml 读取，去掉 visualization. 前缀）
+        thoughtDisplayEnabled = npcConfig.getBoolean("thought-display.enabled", true);
+        thoughtDisplayYOffset = Math.max(0.0, npcConfig.getDouble("thought-display.y-offset", 2.3));
+        thoughtDisplayFlashDurationTicks = Math.max(1, npcConfig.getInt("thought-display.flash-duration-ticks", 40));
         try {
             thoughtDisplayBillboard = Display.Billboard.valueOf(
-                    config.getString("visualization.thought-display.billboard", "CENTER").toUpperCase());
+                    npcConfig.getString("thought-display.billboard", "CENTER").toUpperCase());
         } catch (IllegalArgumentException ex) {
             thoughtDisplayBillboard = Display.Billboard.CENTER;
         }
         thoughtDisplayBackgroundColor = parseBackgroundColor(
-                config.getString("visualization.thought-display.background-color", "0,0,0,64"));
-        thoughtDisplayShadow = config.getBoolean("visualization.thought-display.shadow", true);
-        thoughtDisplaySeeThrough = config.getBoolean("visualization.thought-display.see-through", false);
+                npcConfig.getString("thought-display.background-color", "0,0,0,64"));
+        thoughtDisplayShadow = npcConfig.getBoolean("thought-display.shadow", true);
+        thoughtDisplaySeeThrough = npcConfig.getBoolean("thought-display.see-through", false);
 
-        // visualization.shop-display（收银台全息展示）
-        shopDisplayEnabled = config.getBoolean("visualization.shop-display.enabled", true);
-        shopDisplayHeadYOffset = Math.max(0.0, config.getDouble("visualization.shop-display.head-y-offset", 1.5));
-        shopDisplayNameYOffset = Math.max(0.0, config.getDouble("visualization.shop-display.name-y-offset", 1.2));
-        shopDisplayTextColor = config.getString("visualization.shop-display.text-color", "#a3b547");
+        // shop-display（收银台全息展示；从 market.yml 读取，去掉 visualization. 前缀）
+        shopDisplayEnabled = marketConfig.getBoolean("shop-display.enabled", true);
+        shopDisplayHeadYOffset = Math.max(0.0, marketConfig.getDouble("shop-display.head-y-offset", 1.5));
+        shopDisplayNameYOffset = Math.max(0.0, marketConfig.getDouble("shop-display.name-y-offset", 1.2));
+        shopDisplayTextColor = marketConfig.getString("shop-display.text-color", "#a3b547");
     }
 
     /**
@@ -231,7 +240,7 @@ public class ConfigLoader {
         plugin.reloadConfig();
         config = plugin.getConfig();
         loadMarketConfig();
-        loadPersonalitiesConfig();
+        loadNpcConfig();
         loadValues();
     }
 
@@ -271,7 +280,7 @@ public class ConfigLoader {
      * @return 方块 ID 字符串
      */
     public String getCashRegisterBlock() {
-        return config.getString("shop.cash-register-block", "simmarket:cash_register");
+        return marketConfig.getString("shop.cash-register-block", "simmarket:cash_register");
     }
 
     /**
@@ -280,7 +289,7 @@ public class ConfigLoader {
      * @return 方块 ID 字符串
      */
     public String getShelfBlock() {
-        return config.getString("shop.shelf-block", "simmarket:shelf");
+        return marketConfig.getString("shop.shelf-block", "simmarket:shelf");
     }
 
     public int getNpcSpawnIntervalMin() {
@@ -338,33 +347,33 @@ public class ConfigLoader {
 
     /** NPC 随机装备是否启用。 */
     public boolean isNpcEquipmentEnabled() {
-        return config.getBoolean("npc.equipment.enabled", true);
+        return npcConfig.getBoolean("npc.equipment.enabled", true);
     }
 
     /** 胸甲装备池（Material 名列表）。 */
     public List<String> getEquipmentChestplate() {
-        return config.getStringList("npc.equipment.chestplate");
+        return npcConfig.getStringList("npc.equipment.chestplate");
     }
 
     /** 护腿装备池（Material 名列表）。 */
     public List<String> getEquipmentLeggings() {
-        return config.getStringList("npc.equipment.leggings");
+        return npcConfig.getStringList("npc.equipment.leggings");
     }
 
     /** 靴子装备池（Material 名列表）。 */
     public List<String> getEquipmentBoots() {
-        return config.getStringList("npc.equipment.boots");
+        return npcConfig.getStringList("npc.equipment.boots");
     }
 
     /** 主手装饰物池（Material 名列表，AIR=空手）。 */
     public List<String> getEquipmentMainHand() {
-        return config.getStringList("npc.equipment.main-hand");
+        return npcConfig.getStringList("npc.equipment.main-hand");
     }
 
     /** 皮革染色颜色池（解析十六进制字符串为 Bukkit Color）。 */
     public List<org.bukkit.Color> getLeatherColors() {
         List<org.bukkit.Color> colors = new ArrayList<>();
-        for (String hex : config.getStringList("npc.equipment.leather-colors")) {
+        for (String hex : npcConfig.getStringList("npc.equipment.leather-colors")) {
             try {
                 colors.add(org.bukkit.Color.fromRGB(Integer.parseInt(hex.replace("#", ""), 16)));
             } catch (Exception ignored) {
@@ -392,15 +401,15 @@ public class ConfigLoader {
     }
 
     /**
-     * 获取 personalities.yml 配置（NPC 性格定义）。
+     * 获取 npc.yml 配置（含 npc/skin/thought-display/personalities 四节）。
      *
-     * <p>由 {@link com.oolongho.woosimmarket.npc.PersonalityManager} 在 load/reload 时读取，
-     * 仅返回原始 {@link FileConfiguration}，性格解析与钳制由 PersonalityManager 负责。</p>
+     * <p>由 {@link com.oolongho.woosimmarket.npc.PersonalityManager} 在 load/reload 时读取
+     * personalities 节，仅返回原始 {@link FileConfiguration}，性格解析与钳制由 PersonalityManager 负责。</p>
      *
-     * @return personalities.yml 配置
+     * @return npc.yml 配置
      */
-    public FileConfiguration getPersonalitiesConfig() {
-        return personalitiesConfig;
+    public FileConfiguration getNpcConfig() {
+        return npcConfig;
     }
 
     public List<String> getSkinNames() {
@@ -425,17 +434,17 @@ public class ConfigLoader {
 
     /** NPC 移动速度（格/tick）。 */
     public double getNpcSpeed() {
-        return config.getDouble("npc.speed", 0.15);
+        return npcConfig.getDouble("npc.speed", 0.15);
     }
 
     /** A* 寻路最大搜索距离（方块）。 */
     public int getNpcPathfindingMaxDistance() {
-        return config.getInt("npc.pathfinding-max-distance", 32);
+        return npcConfig.getInt("npc.pathfinding-max-distance", 32);
     }
 
     /** A* 寻路最大迭代节点数。 */
     public int getNpcPathfindingMaxIterations() {
-        return config.getInt("npc.pathfinding-max-iterations", 5000);
+        return npcConfig.getInt("npc.pathfinding-max-iterations", 5000);
     }
 
     /**
@@ -444,7 +453,7 @@ public class ConfigLoader {
      * @return 启用返回 true
      */
     public boolean isShelfDisplayEnabled() {
-        return config.getBoolean("visualization.shelf-display.enabled", true);
+        return marketConfig.getBoolean("shelf-display.enabled", true);
     }
 
     /**
@@ -453,7 +462,7 @@ public class ConfigLoader {
      * @return Y 偏移
      */
     public double getShelfDisplayItemOffsetY() {
-        return config.getDouble("visualization.shelf-display.item-offset-y", 1.2);
+        return marketConfig.getDouble("shelf-display.item-offset-y", 1.2);
     }
 
     /**
@@ -462,7 +471,7 @@ public class ConfigLoader {
      * @return 持续秒数
      */
     public int getRangeDurationSeconds() {
-        return config.getInt("visualization.range-duration-seconds", 10);
+        return marketConfig.getInt("range-duration-seconds", 10);
     }
 
     /** 头顶思考展示是否启用。 */
@@ -515,7 +524,7 @@ public class ConfigLoader {
         return shopDisplayNameYOffset;
     }
 
-    /** 店名文字颜色（十六进制字符串，如 "#a3b547"）。 */
+    /** 店名文字颜色（十六进制字符串）。 */
     public String getShopDisplayTextColor() {
         return shopDisplayTextColor;
     }

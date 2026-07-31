@@ -1,0 +1,266 @@
+# WooSimMarket NPC 系统配置
+
+npc:
+  # NPC 刷新间隔区间（秒），在 [min, max] 内随机
+  spawn-interval-min: 30
+  spawn-interval-max: 180
+  # 每个商店同时存在的 NPC 上限
+  max-concurrent: 5
+  # 卡住判定：连续 N 秒位移不足 threshold-distance 则销毁
+  stuck-threshold-seconds: 15
+  stuck-threshold-distance: 5.0
+  # NPC 离店销毁距离
+  despawn-distance: 32
+  # NPC 到达货架的判定距离
+  target-reach-distance: 1
+  # NPC 移动速度（格/tick，0.15 = 约3格/秒）
+  speed: 0.15
+  # A*寻路最大搜索距离
+  pathfinding-max-distance: 32
+  # A*寻路最大迭代节点数（防止过度计算）
+  pathfinding-max-iterations: 5000
+  # NPC 皮肤外层显示位掩码（0xFF=全部显示，0x40=仅帽子，0x00=全关）
+  # 位定义：0x01 Cape | 0x02 Jacket | 0x04 LSleeve | 0x08 RSleeve | 0x10 LPants | 0x20 RPants | 0x40 Hat
+  skin-parts: 0xFF
+  # 寻路是否规避危险方块（火/岩浆/仙人掌/岩浆块/垂石笋/甜浆果丛/凋灵玫瑰/营火/灵魂营火）
+  pathfinding-avoid-hazards: true
+  # NPC 随机装备
+  equipment:
+    enabled: true
+    # 胸甲池
+    chestplate:
+      - LEATHER_CHESTPLATE
+      - CHAINMAIL_CHESTPLATE
+      - IRON_CHESTPLATE
+    # 护腿池
+    leggings:
+      - LEATHER_LEGGINGS
+      - CHAINMAIL_LEGGINGS
+    # 靴子池
+    boots:
+      - LEATHER_BOOTS
+      - CHAINMAIL_BOOTS
+    # 主手装饰物池
+    main-hand:
+      - AIR
+      - POPPY
+      - CORNFLOWER
+      - BOOK
+      - STICK
+      - TORCH
+      - PAPER
+    # 皮革染色颜色池
+    leather-colors:
+      - "#FF4040"
+      - "#40FF40"
+      - "#4040FF"
+      - "#FFFF40"
+      - "#FF40FF"
+      - "#40FFFF"
+      - "#FFA040"
+      - "#A040FF"
+
+  # NPC 徘徊判定
+  deliberation:
+    # impatience=0（耐心）时的最大判定次数，也是所有性格的判定次数硬上限
+    # impatience=1（急躁）时仅 1 次。设为 1 可全局禁用徘徊（退化为单次 roll）
+    max-rolls: 3
+    # impatience=1（急躁）时的判定间隔（ticks）
+    interval-min-ticks: 20
+    # impatience=0（耐心）时的判定间隔（ticks）
+    interval-max-ticks: 60
+
+skin:
+  # NPC 皮肤列表
+  names:
+    - oolongho
+    - Notch
+    - jeb_
+    - Alex
+    - Steve
+    - Him
+  # 皮肤缓存文件
+  cache-file: data/skins.json
+  # 异步获取皮肤的超时时间（秒）
+  fetch-timeout-seconds: 10
+  # 获取失败时皮肤
+  fallback: Steve
+
+# NPC 头顶思考展示
+thought-display:
+  # 是否启用
+  enabled: true
+  # TextDisplay 相对 NPC 脚位的 Y 偏移（格），2.3 ≈ 头顶上方
+  y-offset: 2.3
+  # BUY/GIVE_UP 结果文本停留时长（ticks）
+  flash-duration-ticks: 40
+  # 朝向模式：CENTER / FIXED / VERTICAL / HORIZONTAL
+  # 配置无效时默认 CENTER
+  billboard: CENTER
+  # 背景色 RGBA，配置无效时默认 0,0,0,64
+  background-color: "0,0,0,64"
+  # 文本阴影
+  shadow: true
+  # 是否穿透方块遮挡
+  see-through: false
+
+# WooSimMarket NPC 性格配置
+#
+# 6 个数值维度
+#   price-sensitivity   价格敏感度倍率（≥0，倍率 × 全局/物品级 sensitivity）
+#                       高=对价格更敏感，低=对价格不敏感
+#
+#   market-sensitivity  购买动量敏感度倍率（≥0，参与 marketFactor 计算）
+#                       高=跟风购买，低=独立判断
+#
+#   impatience          冲动度（[0,1]，0=极慢决策，1=极快决策）
+#                       用于决定判定次数与间隔
+#
+#   budget              预算倍率（≥0，最多花 budget × standardPrice）
+#                       超过此硬上限则购买概率=0
+#
+#   weather-sensitivity 天气敏感度（[0,1]，0=不受影响，1=坏天气不想买）
+#
+#   time-preference     时间偏好（[0,1]，0=夜型，1=日型，0.5=中性）
+#
+# weight 字段
+#   NPC生成时按 weight / totalWeight 概率分配
+#   weight ≤0 的性格被跳过
+#
+# 非法值处理
+#   - impatience / weather-sensitivity / time-preference 超出 [0,1] → 退回[0,1]
+#   - price-sensitivity / market-sensitivity / budget 为负 →  0
+#   - 维度缺失 → 使用默认值（不阻塞加载）
+#
+# 创建新性格
+#   在 personalities 节点下新增 key，配置 weight + 6 维度即可：
+#
+#   new-personality-name:
+#     weight: 5
+#     price-sensitivity: 1.0
+#     market-sensitivity: 1.0
+#     impatience: 0.5
+#     budget: 3.0
+#     weather-sensitivity: 0.3
+#     time-preference: 0.5
+#
+#   并在语言文件中添加 personality-prefix-new-personality-name 条目
+
+personalities:
+  # 中性性格
+  normal:
+    weight: 10
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+
+  # === price-sensitivity 维度 ===
+  generous: # [慷慨] 对价格不敏感
+    weight: 5
+    price-sensitivity: 0.4
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+  stingy: # [吝啬] 对价格高度敏感
+    weight: 5
+    price-sensitivity: 2.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+
+  # === market-sensitivity 维度 ===
+  trend-follower: # [跟风] 热销品更想买
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.8
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+  independent: # [独立] 少受市场影响
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 0.3
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+
+  # === impatience 维度 ===
+  impatient: # [急躁] 决策快
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.95
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+  patient: # [耐心] 决策慢
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.1
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+
+  # === budget 维度 ===
+  rich: # [富裕] 预算高
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 6.0
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+  poor: # [贫穷] 预算低
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 1.2
+    weather-sensitivity: 0.3
+    time-preference: 0.5
+
+  # === weather-sensitivity 维度 ===
+  homebody: # [宅] 坏天气不想买
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.9
+    time-preference: 0.5
+  all-weather: # [全天候] 天气不影响
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.0
+    time-preference: 0.5
+
+  # === time-preference 维度 ===
+  early-bird: # [早鸟] 白天购买意愿高
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 1.0
+  night-owl: # [夜猫] 夜晚购买意愿高
+    weight: 5
+    price-sensitivity: 1.0
+    market-sensitivity: 1.0
+    impatience: 0.5
+    budget: 3.0
+    weather-sensitivity: 0.3
+    time-preference: 0.0

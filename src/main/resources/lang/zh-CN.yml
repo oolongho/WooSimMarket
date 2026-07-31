@@ -56,17 +56,19 @@ personality-prefix-early-bird: "<color:#a3b547>[早鸟]</color> "
 personality-prefix-night-owl: "<color:#a3b547>[夜猫]</color> "
 
 # GUI 标题与按钮（GUI 标题非聊天消息，不带 {prefix}）
-gui-shelf-title: "<color:#5EEAD4><bold>货架管理</bold></color>"
+gui-shelf-title: "<black><bold>货架管理</bold></black>"
 gui-shelf-set-price: "<color:#F59E0B>点击设定价格</color>"
 gui-shelf-current-price: "<color:#F59E0B>当前价格: {price}</color>"
 gui-shelf-enabled: "<color:#10B981>已启用</color>"
 gui-shelf-disabled: "<color:#EF4444>已禁用</color>"
 gui-shelf-toggle-lore: "<color:#9CA3AF>点击切换状态</color>"
-gui-shop-title: "<color:#5EEAD4><bold>商店面板</bold></color>"
+gui-shop-title: "<black><bold>商店面板</bold></black>"
 gui-shop-info: "<color:#5EEAD4>商店信息</color>"
 gui-shop-withdraw: "<color:#10B981>点击提现</color>"
 gui-shop-refresh: "<color:#9CA3AF>点击刷新</color>"
 gui-shop-balance: "<color:#F59E0B>当前余额: {balance}</color>"
+gui-shop-billboard-name: "{owner} 的小店"
+gui-shop-shelves: "<color:#F59E0B>货架: </color><color:#10B981>{enabled}</color><color:#F59E0B>/{total}</color>"
 
 # 命令
 command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket 命令</bold></color>"
@@ -86,7 +88,7 @@ thought-display:
   patient:        { enter: "<i><gray>仔细想想…</gray></i>", hesitate: "<i><gray>再考虑考虑…</gray></i>", buy: "<green>想清楚了，买！</green>", give-up: "<gray>时机未到，走吧</gray>" }
   rich:           { enter: "<i><gray>随便看看…</gray></i>", hesitate: "<i><gray>钱不是问题…</gray></i>", buy: "<green>直接拿下！</green>", give-up: "<gray>没看上，走</gray>" }
   poor:           { enter: "<i><gray>摸摸口袋…</gray></i>", hesitate: "<i><gray>够不够钱…</gray></i>", buy: "<green>刚好够，买！</green>", give-up: "<gray>买不起，走</gray>" }
-  homebody:       { enter: "<i><gray>天气怎么样…</gray></i>", hesitate: "<i><gray>不太想出门…</gray></i>", buy: "<green>今天可以！</green>", give-up: "<gray>天气不好，回</gray>" }
+  homebody:       { enter: "<i><gray>天气怎么样…</gray></i>", hesitate: "<i><gray>不太想出门…</gray></i>", buy: "<green>今天可以！</green>", give-up: "<gray>天气不好，回去</gray>" }
   all-weather:    { enter: "<i><gray>风雨无阻…</gray></i>", hesitate: "<i><gray>继续看看…</gray></i>", buy: "<green>随时可买！</green>", give-up: "<gray>不想要了</gray>" }
   early-bird:     { enter: "<i><gray>趁早看看…</gray></i>", hesitate: "<i><gray>还来得及…</gray></i>", buy: "<green>早买早享受！</green>", give-up: "<gray>晚点再来</gray>" }
   night-owl:      { enter: "<i><gray>夜里逛逛…</gray></i>", hesitate: "<i><gray>夜深了…</gray></i>", buy: "<green>夜购正合意！</green>", give-up: "<gray>天快亮了，走</gray>" }
