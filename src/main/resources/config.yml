@@ -3,7 +3,7 @@
 settings:
   # 调试日志细分开关（互不依赖，按需开启）
   debug:
-    # 购买判定：P 值计算、各因子（budget/price/weather/time/multiplier）、roll 结果
+    # 购买判定：P 值计算、各因子（budget/price/weather/time/global-multiplier）、roll 结果
     purchase: false
     # 寻路：请求/结果/迭代数/区块快照
     pathfinding: false
@@ -105,16 +105,16 @@ skin:
     - Alex
     - Steve
     - Him
-  # 皮肤缓存文件（落盘到 plugins/WooSimMarket/<file>）
-  cache-file: skins.json
+  # 皮肤缓存文件（落盘到 plugins/WooSimMarket/<file>，默认归档至 data/ 子文件夹）
+  cache-file: data/skins.json
   # 异步获取皮肤的超时时间（秒）
   fetch-timeout-seconds: 10
   # 获取失败时的兜底皮肤（STEVE / ALEX）
   fallback: Steve
 
 database:
-  # SQLite 数据库文件名（位于 plugins/WooSimMarket/ 下）
-  file: woosimmarket.db
+  # SQLite 数据库文件路径（位于 plugins/WooSimMarket/ 下，默认归档至 data/ 子文件夹）
+  file: data/woosimmarket.db
 
 visualization:
   # 货架方块上方全息展示（启用且有物品的货架显示物品图标+库存）

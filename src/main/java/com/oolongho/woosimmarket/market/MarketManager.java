@@ -2,33 +2,26 @@ package com.oolongho.woosimmarket.market;
 
 import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
-import com.oolongho.woosimmarket.util.TaskUtil;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 动态市场管理器 —— 72 桶滑动窗口统计全服 NPC 购买量，按供需调整基准价。
+ * 物品价目表与购买动量管理器。
  *
- * <p>核心公式：
- * <ul>
- *   <li>{@code Multiplier = TargetVolume / CurrentTotalPurchases}（钳制 [0.1, 5.0]，见 {@link #getMultiplier}）</li>
- *   <li>FinalBase 合成（StandardPrice × Multiplier^exponent）已迁移至 {@link PurchaseFormula}</li>
- * </ul></p>
+ * <p>职责一：加载 items.yml 提供物品标准价与价格敏感度查询。
+ * 未在 items.yml 中定义的物品使用 {@link #DEFAULT_BASE_PRICE} 兜底。</p>
  *
- * <p>滑动窗口：{@code bucketCount}（默认 72）个时间桶，每 {@code bucketMinutes}
- * （默认 5）分钟滚动一次（清最老桶、推进当前桶索引），覆盖 {@code 72 × 5 = 360} 分钟 = 6 小时。</p>
+ * <p>职责二：维护每物品的购买动量 EMA（{@link #purchaseEma}），跟踪近期 NPC
+ * 购买结果作为"社交证明/羊群动量"信号，供 {@link PurchaseFormula} 的 marketFactor 使用。
+ * EMA ∈ [0,1]，初始 0.5（中性），购买 outcome=1.0，不买 outcome=0.0，α=0.3。
+ * 不持久化，重启归零；事件驱动更新（无定时衰减任务）。</p>
  *
- * <p>线程模型：所有方法在主线程执行（recordPurchase 由 NpcManager.handlePurchase
- * 主线程调用，rollBuckets 由主线程定时任务触发）。</p>
- *
- * <p>物品数据来源：{@code items.yml}（标准价 + 目标销量）。未在 items.yml 中定义的
- * 物品使用 {@link #DEFAULT_BASE_PRICE} 兜底。</p>
+ * <p>线程模型：所有方法在主线程执行。</p>
  *
  * @author oolongho
  */
@@ -43,73 +36,32 @@ public class MarketManager {
     /** 物品标准价表（itemId → ItemInfo）。 */
     private final Map<String, ItemInfo> itemInfos = new HashMap<>();
 
-    /** 循环桶数组：每个桶存储 itemId → 该时间段内的购买量。 */
-    private final Map<String, Integer>[] buckets;
+    /** 购买动量 EMA 表（itemId → 动量值 ∈[0,1]，缺省 0.5 中性）。不持久化，重启归零。 */
+    private final Map<String, Double> purchaseEma = new HashMap<>();
 
-    /** 当前活跃桶索引（0 ~ bucketCount-1）。 */
-    private int currentBucketIndex;
+    /** EMA 平滑系数（新结果贡献 30%，历史 70%）。 */
+    private static final double EMA_ALPHA = 0.3;
 
-    /** 桶滚动定时任务。 */
-    private BukkitTask rollTask;
+    /** 物品标准价信息。priceSensitivity 为 -1 时用全局默认。 */
+    public record ItemInfo(String itemId, double standardPrice, double priceSensitivity) {}
 
-    // 市场参数（从 configLoader 读取）
-    private final double multiplierMin;
-    private final double multiplierMax;
-    private final double multiplierExponent;
-    private final int bucketCount;
-    private final int bucketMinutes;
-
-    /** 物品标准价信息。priceSensitivity/marketSensitivity 为 -1 时用全局默认。 */
-    public record ItemInfo(String itemId, double standardPrice, int targetVolume,
-                           double priceSensitivity, double marketSensitivity) {}
-
-    @SuppressWarnings("unchecked")
     public MarketManager(WooSimMarket plugin, ConfigLoader configLoader) {
         this.plugin = plugin;
         this.configLoader = configLoader;
-        this.multiplierMin = configLoader.getMarketMultiplierMin();
-        this.multiplierMax = configLoader.getMarketMultiplierMax();
-        this.multiplierExponent = configLoader.getMarketMultiplierExponent();
-        this.bucketCount = configLoader.getMarketBucketCount();
-        this.bucketMinutes = configLoader.getMarketBucketMinutes();
-
-        this.buckets = new Map[bucketCount];
-        for (int i = 0; i < bucketCount; i++) {
-            buckets[i] = new HashMap<>();
-        }
-        this.currentBucketIndex = 0;
     }
 
     /**
-     * 启动市场系统：加载 items.yml 并启动桶滚动定时任务。
+     * 启动市场系统：加载 items.yml。
      */
     public void start() {
         loadItems();
-        long periodTicks = bucketMinutes * 60L * 20L;
-        // 首次延迟 = periodTicks（让第一个桶有完整的数据采集周期）
-        rollTask = TaskUtil.runAtFixed(plugin, this::rollBuckets, periodTicks, periodTicks);
-        plugin.getLogger().info(() -> String.format(
-                "动态市场已启动: %d 桶 × %d 分钟 = %d 小时窗口",
-                bucketCount, bucketMinutes, bucketCount * bucketMinutes / 60));
     }
 
     /**
-     * 停止市场系统：取消滚动任务。
+     * 停止市场系统（桶滚动机制已移除，无任务需取消）。
      */
     public void stop() {
-        if (rollTask != null) {
-            rollTask.cancel();
-            rollTask = null;
-        }
-    }
-
-    /**
-     * 记录一次 NPC 购买（在当前时间桶中累加该物品的购买量）。
-     *
-     * @param itemId 物品 ID（Material 枚举名，如 DIAMOND）
-     */
-    public void recordPurchase(String itemId) {
-        buckets[currentBucketIndex].merge(itemId, 1, Integer::sum);
+        // 桶滚动机制已移除，无任务需取消
     }
 
     /**
@@ -129,27 +81,10 @@ public class MarketManager {
     }
 
     /**
-     * 获取物品的市场敏感度（BasePrice 公式指数）。
-     *
-     * <p>优先返回 items.yml 的 per-item market-sensitivity，缺省（-1）返回全局
-     * {@code multiplier-exponent}。对称于 {@link #getItemPriceSensitivity}。</p>
-     *
-     * @param itemId 物品 ID
-     * @return 市场敏感度（BasePrice 指数）
-     */
-    public double getItemMarketSensitivity(String itemId) {
-        ItemInfo info = itemInfos.get(itemId);
-        if (info != null && info.marketSensitivity() >= 0) {
-            return info.marketSensitivity();
-        }
-        return configLoader.getMarketMultiplierExponent();
-    }
-
-    /**
      * 获取物品标准价（items.yml 配置的公平价）。
      *
      * <p>未在 items.yml 中定义的物品返回 {@link #DEFAULT_BASE_PRICE}。
-     * 供 PurchaseFormula 的 budget 硬门与 basePrice 基准使用。</p>
+     * 供 PurchaseFormula 的 budget 硬门与 priceFactor 基准使用。</p>
      *
      * @param itemId 物品 ID
      * @return 标准价
@@ -160,47 +95,31 @@ public class MarketManager {
     }
 
     /**
-     * 计算指定物品的市场倍率。
+     * 获取物品的购买动量（近期 NPC 购买结果 EMA）。
      *
-     * <p>公式：{@code Multiplier = TargetVolume / CurrentTotalPurchases}（钳制 [min, max]）<br>
-     * 无购买记录时返回 {@code 1.0}（中性）。理由：返回 {@code multiplierMax} 会令
-     * basePrice 虚高（×5^exponent），priceFactor 爆炸至 ≫1，P 钳制 1.0，导致 NPC
-     * 首次 roll 必中、无徘徊区间。返回 1.0 让 basePrice=standardPrice，P 由
-     * {@code userPrice vs standardPrice} 决定，定价高于标准价时 P 落入 (0,1) 徘徊区间。</p>
+     * <p>动量 ∈ [0,1]：1.0=近期 NPC 都买了（热销），0.0=都没买（冷门），
+     * 0.5=中性（初始/无记录）。供 {@link PurchaseFormula} 的 marketFactor 使用。</p>
      *
      * @param itemId 物品 ID
-     * @return 市场倍率 [multiplierMin, multiplierMax]；无记录时返回 1.0
+     * @return 动量值 ∈ [0,1]，缺省 0.5
      */
-    public double getMultiplier(String itemId) {
-        ItemInfo info = itemInfos.get(itemId);
-        if (info == null) {
-            return 1.0;
-        }
-
-        int totalPurchases = 0;
-        for (Map<String, Integer> bucket : buckets) {
-            totalPurchases += bucket.getOrDefault(itemId, 0);
-        }
-
-        if (totalPurchases == 0) {
-            return 1.0;
-        }
-
-        double multiplier = (double) info.targetVolume() / totalPurchases;
-        return Math.max(multiplierMin, Math.min(multiplierMax, multiplier));
+    public double getPurchaseMomentum(String itemId) {
+        return purchaseEma.getOrDefault(itemId, 0.5);
     }
 
     /**
-     * 滚动时间桶：推进当前桶索引并清空新桶（丢弃最老数据）。
+     * 记录 NPC 购买判定结果，更新该物品的动量 EMA。
+     *
+     * <p>EMA 更新：{@code ema = ema × (1 − α) + outcome × α}（α=0.3）。
+     * 购买 outcome=1.0，不买 outcome=0.0。主线程调用，无需同步。</p>
+     *
+     * @param itemId 物品 ID
+     * @param bought true=NPC 购买，false=未购买（判定耗尽）
      */
-    private void rollBuckets() {
-        currentBucketIndex = (currentBucketIndex + 1) % bucketCount;
-        buckets[currentBucketIndex].clear();
-
-        if (configLoader.isDebugGeneral()) {
-            plugin.getLogger().info(() -> String.format(
-                    "市场桶滚动: index=%d/%d", currentBucketIndex, bucketCount - 1));
-        }
+    public void recordPurchaseOutcome(String itemId, boolean bought) {
+        double outcome = bought ? 1.0 : 0.0;
+        double current = purchaseEma.getOrDefault(itemId, 0.5);
+        purchaseEma.put(itemId, current * (1.0 - EMA_ALPHA) + outcome * EMA_ALPHA);
     }
 
     /**
@@ -225,12 +144,9 @@ public class MarketManager {
                 continue;
             }
             double standardPrice = itemSection.getDouble("standard-price", DEFAULT_BASE_PRICE);
-            int targetVolume = itemSection.getInt("target-volume", 100);
             // per-item 敏感度覆盖（-1 表示用全局默认）
             double priceSensitivity = itemSection.getDouble("price-sensitivity", -1.0);
-            double marketSensitivity = itemSection.getDouble("market-sensitivity", -1.0);
-            itemInfos.put(itemId, new ItemInfo(itemId, standardPrice, targetVolume,
-                    priceSensitivity, marketSensitivity));
+            itemInfos.put(itemId, new ItemInfo(itemId, standardPrice, priceSensitivity));
         }
 
         plugin.getLogger().info(() -> "items.yml 加载完成: " + itemInfos.size() + " 个物品");

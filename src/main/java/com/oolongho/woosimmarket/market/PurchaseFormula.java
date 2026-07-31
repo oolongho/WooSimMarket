@@ -8,21 +8,21 @@ import org.bukkit.World;
 /**
  * 多因素购买意愿判别式（纯计算，无状态）。
  *
- * <p>整合性格 5 维度（price/market/budget/weather/time）+ 全局热度 + 物品级敏感度，
- * 输出 [0,1] 概率。budget 为硬门提前返回 0；其余因子乘性合成后钳制到 [0,1]。
- * 不钳制单个因子，允许各因子 &gt;1（低价/日间加成），相乘后统一收敛。</p>
+ * <p>整合性格 5 维度（price/market/budget/weather/time）+ 物品级 price-sensitivity + 全局 global-mult
+ * + 购买动量 momentum，输出 [0,1] 概率。budget 为硬门提前返回 0；其余因子乘性合成后钳制到 [0,1]。
+ * 不钳制单个因子，允许各因子 &gt;1（低价/日间/热销加成），相乘后统一收敛。</p>
  *
  * <p>公式：
  * <pre>
  * ① budget 硬门：userPrice &gt; budget × standardPrice → P=0
- * ② priceFactor = (basePrice / userPrice) ^ effectiveSensitivity
+ * ② priceFactor = (standardPrice / userPrice) ^ effectiveSensitivity
  *      effectiveSensitivity = getItemPriceSensitivity(itemId) × personality.priceSensitivity
- *      effectiveExponent    = getItemMarketSensitivity(itemId) × personality.marketSensitivity
- *      basePrice            = standardPrice × multiplier ^ effectiveExponent
  * ③ weatherFactor = 1 − weatherSensitivity × (hasStorm ? 1 : 0)
  * ④ timeFactor    = 1 + timeStrength × (timePreference − 0.5) × 2 × (dayNess − 0.5)
  *      dayNess = (cos(2π × (time − 6000) / 24000) + 1) / 2   // 正午=1 半夜=0
- * ⑤ P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × globalMult )
+ * ⑤ marketFactor = 1 + momentumStrength × (momentum − 0.5) × 2 × personality.marketSensitivity
+ *      momentum = MarketManager.getPurchaseMomentum(itemId)   // EMA∈[0,1], 默认0.5
+ * ⑥ P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × marketFactor × globalMult )
  * </pre></p>
  *
  * <p>线程模型：仅主线程调用（NpcManager.handleReached）。无可变字段，纯函数。</p>
@@ -68,12 +68,9 @@ public class PurchaseFormula {
             return 0.0;
         }
 
-        // ② priceFactor（含 price + market 两维度）
-        double multiplier = marketManager.getMultiplier(itemId);
-        double effectiveExponent = marketManager.getItemMarketSensitivity(itemId) * personality.marketSensitivity();
-        double basePrice = standardPrice * Math.pow(multiplier, effectiveExponent);
+        // ② priceFactor（standardPrice 作为唯一价格基准，所见即所得）
         double effectiveSensitivity = marketManager.getItemPriceSensitivity(itemId) * personality.priceSensitivity();
-        double priceFactor = Math.pow(basePrice / userPrice, effectiveSensitivity);
+        double priceFactor = Math.pow(standardPrice / userPrice, effectiveSensitivity);
 
         // ③ weatherFactor
         double weatherFactor = 1.0 - personality.weatherSensitivity() * (world.hasStorm() ? 1.0 : 0.0);
@@ -83,16 +80,21 @@ public class PurchaseFormula {
         double dayNess = (Math.cos(2.0 * Math.PI * (world.getTime() - 6000) / 24000.0) + 1.0) / 2.0;
         double timeFactor = 1.0 + timeStrength * (personality.timePreference() - 0.5) * 2.0 * (dayNess - 0.5);
 
-        // ⑤ 合成并钳制最终概率
+        // ⑤ marketFactor（momentum=0.5 时恒=1，向后兼容；trend-follower 强跟风，independent 几乎不受影响）
+        double momentumStrength = configLoader.getMarketMomentumStrength();
+        double momentum = marketManager.getPurchaseMomentum(itemId);
+        double marketFactor = 1.0 + momentumStrength * (momentum - 0.5) * 2.0 * personality.marketSensitivity();
+
+        // ⑥ 合成并钳制最终概率
         double globalMult = configLoader.getMarketGlobalMultiplier();
-        double p = Math.max(0.0, Math.min(1.0, priceFactor * weatherFactor * timeFactor * globalMult));
+        double p = Math.max(0.0, Math.min(1.0, priceFactor * weatherFactor * timeFactor * marketFactor * globalMult));
 
         if (dbg) {
             Bukkit.getLogger().info(String.format(
-                "[WooSimMarket][Purchase] %s/%s price=%.2f std=%.2f | budget门=%.2f通过 | mult=%.2f base=%.2f priceF=%.3f(sens=%.2f) | weather=%.2f time=%.2f(dayNess=%.2f) global=%.2f | → P=%.3f",
+                "[WooSimMarket][Purchase] %s/%s price=%.2f std=%.2f | budget门=%.2f通过 | priceF=%.3f(sens=%.2f) | weather=%.2f time=%.2f(dayNess=%.2f) marketF=%.3f(mom=%.2f) global=%.2f | → P=%.3f",
                 personality.name(), itemId, userPrice, standardPrice, budgetLimit,
-                multiplier, basePrice, priceFactor, effectiveSensitivity,
-                weatherFactor, timeFactor, dayNess, globalMult, p));
+                priceFactor, effectiveSensitivity,
+                weatherFactor, timeFactor, dayNess, marketFactor, momentum, globalMult, p));
         }
         return p;
     }

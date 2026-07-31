@@ -56,13 +56,9 @@ public class ConfigLoader {
 
     // market
     private double marketSensitivity;
-    private double marketMultiplierMin;
-    private double marketMultiplierMax;
-    private double marketMultiplierExponent;
-    private int marketBucketCount;
-    private int marketBucketMinutes;
     private double marketGlobalMultiplier;
     private double marketTimeStrength;
+    private double marketMomentumStrength;
 
     // skin
     private List<String> skinNames;
@@ -159,26 +155,21 @@ public class ConfigLoader {
 
         // market（从独立文件 market.yml 读取）
         marketSensitivity = Math.max(0.1, marketConfig.getDouble("market.sensitivity", 2.0));
-        marketMultiplierMin = Math.max(0.001, marketConfig.getDouble("market.multiplier-min", 0.1));
-        // 保证 max >= min
-        marketMultiplierMax = Math.max(marketMultiplierMin, marketConfig.getDouble("market.multiplier-max", 5.0));
-        marketMultiplierExponent = Math.max(0.0, marketConfig.getDouble("market.multiplier-exponent", 0.8));
-        marketBucketCount = Math.max(1, marketConfig.getInt("market.bucket-count", 72));
-        marketBucketMinutes = Math.max(1, marketConfig.getInt("market.bucket-minutes", 5));
         marketGlobalMultiplier = Math.max(0.0, marketConfig.getDouble("market.global-multiplier", 1.0));
         marketTimeStrength = Math.max(0.0, marketConfig.getDouble("market.time-strength", 1.0));
+        marketMomentumStrength = Math.max(0.0, marketConfig.getDouble("market.momentum-strength", 0.3));
 
         // skin
         skinNames = config.getStringList("skin.names");
         if (skinNames.isEmpty()) {
             skinNames = new ArrayList<>(List.of("Notch", "jeb_"));
         }
-        skinCacheFile = config.getString("skin.cache-file", "skins.json");
+        skinCacheFile = config.getString("skin.cache-file", "data/skins.json");
         skinFetchTimeoutSeconds = Math.max(1, config.getInt("skin.fetch-timeout-seconds", 10));
         skinFallback = config.getString("skin.fallback", "STEVE");
 
         // database
-        databaseFile = config.getString("database.file", "woosimmarket.db");
+        databaseFile = config.getString("database.file", "data/woosimmarket.db");
 
         // visualization.thought-display（头顶思考展示，子系统 4）
         thoughtDisplayEnabled = config.getBoolean("visualization.thought-display.enabled", true);
@@ -375,32 +366,17 @@ public class ConfigLoader {
         return marketSensitivity;
     }
 
-    public double getMarketMultiplierMin() {
-        return marketMultiplierMin;
-    }
-
-    public double getMarketMultiplierMax() {
-        return marketMultiplierMax;
-    }
-
-    public double getMarketMultiplierExponent() {
-        return marketMultiplierExponent;
-    }
-
-    public int getMarketBucketCount() {
-        return marketBucketCount;
-    }
-
-    public int getMarketBucketMinutes() {
-        return marketBucketMinutes;
-    }
-
     public double getMarketGlobalMultiplier() {
         return marketGlobalMultiplier;
     }
 
     public double getMarketTimeStrength() {
         return marketTimeStrength;
+    }
+
+    /** 购买动量因子强度（marketFactor 幅度，0=禁用动量，0.3=默认）。 */
+    public double getMarketMomentumStrength() {
+        return marketMomentumStrength;
     }
 
     /**

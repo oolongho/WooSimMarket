@@ -6,10 +6,10 @@
 # 【6 个数值维度】
 #   price-sensitivity   价格敏感度倍率（≥0，倍率 × 全局/物品级 sensitivity）
 #                       高=对价格更敏感，低=对价格不敏感
-#   market-sensitivity  供需敏感度倍率（≥0，倍率 × 全局/物品级 market-sensitivity）
+#   market-sensitivity  购买动量敏感度倍率（≥0，参与 marketFactor 计算）
 #                       高=跟风购买（热销品更想买），低=独立判断
 #   impatience          冲动度（[0,1]，0=极慢决策，1=极快决策）
-#                       后续子系统 3 用于决定判定次数与间隔
+#                       子系统 3 用于决定判定次数与间隔
 #   budget              预算倍率（≥0，最多花 budget × standardPrice）
 #                       超过此硬上限则购买概率=0
 #   weather-sensitivity 天气敏感度（[0,1]，0=不受影响，1=坏天气完全不买）
@@ -88,7 +88,7 @@ personalities:
     time-preference: 0.5
 
   # === impatience 维度 ===
-  impatient: # [急躁] 决策快（后续子系统 3：少次快决）
+  impatient: # [急躁] 决策快（子系统 3：少次快决）
     weight: 5
     price-sensitivity: 1.0
     market-sensitivity: 1.0
@@ -96,7 +96,7 @@ personalities:
     budget: 3.0
     weather-sensitivity: 0.3
     time-preference: 0.5
-  patient: # [耐心] 决策慢（后续子系统 3：多次慢决）
+  patient: # [耐心] 决策慢（子系统 3：多次慢决）
     weight: 5
     price-sensitivity: 1.0
     market-sensitivity: 1.0

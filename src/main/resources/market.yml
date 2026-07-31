@@ -1,53 +1,26 @@
 # ===== WooSimMarket 市场经济配置 =====
 #
-# 本文件控制 NPC 购买概率与市场基准价的计算参数。
-# 物品级覆盖见 items.yml（per-item price-sensitivity / market-sensitivity）。
+# 本文件控制 NPC 购买概率计算参数。
+# 物品级覆盖见 items.yml（per-item price-sensitivity）。
 #
 # 【购买概率公式】（实现在 market/PurchaseFormula.java，单次 roll）
 #   ① budget 硬门：userPrice > personality.budget × standardPrice → P=0
-#   ② priceFactor = (basePrice / userPrice) ^ effectiveSensitivity
+#   ② priceFactor = (standardPrice / userPrice) ^ effectiveSensitivity
 #        effectiveSensitivity = getItemPriceSensitivity × personality.priceSensitivity
-#        effectiveExponent    = getItemMarketSensitivity × personality.marketSensitivity
-#        basePrice            = standardPrice × multiplier ^ effectiveExponent
 #   ③ weatherFactor = 1 − weatherSensitivity × (hasStorm ? 1 : 0)
 #   ④ timeFactor    = 1 + time-strength × (timePreference − 0.5) × 2 × (dayNess − 0.5)
 #        dayNess = (cos(2π × (time − 6000) / 24000) + 1) / 2   // 正午=1 半夜=0
-#   ⑤ P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × global-multiplier )
+#   ⑤ marketFactor = 1 + momentum-strength × (momentum − 0.5) × 2 × market-sensitivity
+#        momentum = MarketManager.getPurchaseMomentum(itemId)  // EMA∈[0,1], 默认0.5
+#   ⑥ P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × marketFactor × global-multiplier )
 #
-#   - standardPrice/multiplier/敏感度：见 items.yml 与下方市场参数
-#   - personality 5 维度：见 personalities.yml（impatience 留给子系统 3）
+#   - standardPrice / price-sensitivity：见 items.yml 与下方市场参数
+#   - personality 5 维度参与 P（impatience 用于子系统 3，market-sensitivity 参与动量因子⑤）
 #   - 不钳制单个因子，仅钳制最终 P（允许低价/日间加成 >1 后相乘收敛）
-#
-# 【市场基准价公式】
-#   BasePrice = StandardPrice × Multiplier ^ exponent
-#
-#   - StandardPrice：物品标准价（items.yml 配置）
-#   - Multiplier：供需倍率 = targetVolume / recentPurchases
-#     （实际销量低于目标 → Multiplier > 1 → 涨价鼓励购买；
-#      实际销量高于目标 → Multiplier < 1 → 降价抑制购买）
-#   - exponent：市场敏感度（<1 时供需影响被压缩；
-#     >1 时供需影响被放大。稀有物品建议在 items.yml 降低此值）
-#   - Multiplier 钳制在 [multiplier-min, multiplier-max] 区间
-#
-# 【时间桶机制】
-#   滑动窗口 = bucket-count × bucket-minutes 分钟
-#   默认 72 × 5 = 360 分钟 = 6 小时
-#   每 bucket-minutes 分钟滚动一个桶，旧桶清空
-#   recentPurchases = 所有桶内该物品购买次数之和
 
 market:
   # 价格敏感度（P 公式指数，>1 提价显著降概率）
   sensitivity: 2.0
-  # 供需倍率下限（防止价格暴跌）
-  multiplier-min: 0.1
-  # 供需倍率上限（防止价格暴涨）
-  multiplier-max: 5.0
-  # 市场敏感度（BasePrice 公式指数，<1 压缩供需影响）
-  multiplier-exponent: 0.8
-  # 时间桶数量（滑动窗口 = count × minutes 分钟）
-  bucket-count: 72
-  # 每桶时长（分钟）
-  bucket-minutes: 5
   # 全局购买意愿缩放（P 公式最终乘数）。<1 让公平价也产生犹豫：
   #   0.6 → 公平价 P≈0.6（犹豫），8折 P≈0.94（倾向买），半价 P=1.0（必买）
   #   1.0 → 公平价 P=1.0（必买，无犹豫）
@@ -55,3 +28,7 @@ market:
   # 时间因子幅度（0=全局禁用时间影响；1.0=默认）
   # dayNess 正午=1 半夜=0；timePreference 0=夜型 1=日型 0.5=中性（中性时 timeFactor恒=1）
   time-strength: 1.0
+  # 购买动量强度（marketFactor 幅度，0=禁用动量）
+  # trend-follower(1.8) 在热销品(momentum=1.0)上 +54%，冷门品(momentum=0.0) 上 -54%
+  # independent(0.3) 仅 ±5%，几乎不受影响。推荐 [0, 0.5]
+  momentum-strength: 0.3

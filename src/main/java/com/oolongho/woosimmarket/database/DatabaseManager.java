@@ -114,7 +114,7 @@ public class DatabaseManager {
      * 构造数据库管理器。
      *
      * @param plugin   插件实例，用于获取数据目录与 logger
-     * @param fileName 数据库文件名（如 {@code "woosimmarket.db"}），与 ConfigLoader 解耦
+     * @param fileName 数据库文件路径（如 {@code "data/woosimmarket.db"}），与 ConfigLoader 解耦
      */
     public DatabaseManager(JavaPlugin plugin, String fileName) {
         this.plugin = plugin;
@@ -140,6 +140,10 @@ public class DatabaseManager {
                 throw new SQLException("Cannot create plugin data folder: " + dataFolder);
             }
             File dbFile = new File(dataFolder, fileName);
+            File parent = dbFile.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                throw new SQLException("Cannot create data directory: " + parent);
+            }
 
             connection = DriverManager.getConnection(JDBC_PREFIX + dbFile.getAbsolutePath());
 

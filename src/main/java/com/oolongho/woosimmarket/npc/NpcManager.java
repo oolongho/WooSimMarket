@@ -163,7 +163,7 @@ public class NpcManager {
             return;
         }
 
-        // 购买概率判别式（5 因子，委托 PurchaseFormula，计算一次缓存于 SimNpc）
+        // 购买概率判别式（委托 PurchaseFormula，计算一次缓存于 SimNpc）
         String itemId = getItemName(shelf.itemStack());
         double userPrice = shelf.price();
         double probability = purchaseFormula.calculate(
@@ -190,7 +190,8 @@ public class NpcManager {
      * <p>流程：重检 {@code shelf.canSell()}（徘徊期间可能被买空/拆除）→
      * 用缓存 P roll → 命中则 {@link #handlePurchase} + {@link SimNpc#startLeaving()}；
      * 未命中且 {@code rollsDone >= totalRolls} 则 startLeaving；未命中且仍有余量
-     * 则返回（SimNpc 计时器已由 tick() 重置，自动推进下次 roll）。</p>
+     * 则返回（SimNpc 计时器已由 tick() 重置，自动推进下次 roll）。
+     * 命中或判定耗尽时调用 {@link MarketManager#recordPurchaseOutcome} 更新购买动量 EMA。</p>
      *
      * @param npc 处于 DELIBERATING 状态的 NPC
      */
@@ -203,11 +204,12 @@ public class NpcManager {
             return;
         }
 
+        String itemId = getItemName(shelf.itemStack());
         double roll = ThreadLocalRandom.current().nextDouble();
         if (roll < npc.deliberationProbability()) {
             // 命中：购买、flash BUY 文本、离开
-            String itemId = getItemName(shelf.itemStack());
             handlePurchase(npc, shelf, itemId);
+            marketManager.recordPurchaseOutcome(itemId, true);
             thoughtDisplayManager.flash(npc, Phase.BUY);
             npc.startLeaving();
             return;
@@ -216,6 +218,7 @@ public class NpcManager {
         // 未命中：判定耗尽则 flash GIVE_UP 并离开，否则切 HESITATE 等待下次 roll
         if (npc.deliberationRollsDone() >= npc.deliberationTotalRolls()) {
             thoughtDisplayManager.flash(npc, Phase.GIVE_UP);
+            marketManager.recordPurchaseOutcome(itemId, false);
             npc.startLeaving();
         } else {
             thoughtDisplayManager.update(npc, Phase.HESITATE);
@@ -255,7 +258,7 @@ public class NpcManager {
     }
 
     /**
-     * 执行购买：扣库存、加商店余额、记录市场购买、广播消息。
+     * 执行购买：扣库存、加商店余额、广播消息。
      *
      * @param npc    NPC
      * @param shelf  货架
@@ -281,9 +284,6 @@ public class NpcManager {
 
         // 刷新货架展示（基于最新库存数据）
         shelfDisplayManager.refreshShelf(shelf);
-
-        // 记录市场购买（动态调价依据）
-        marketManager.recordPurchase(itemId);
 
         // 广播购买消息
         String priceStr = String.format("%.2f", revenue);

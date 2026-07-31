@@ -39,7 +39,7 @@ import java.sql.SQLException;
  *
  * <p>装配顺序：ConfigLoader → Messages → DatabaseManager → DAOs →
  * CraftEngineHook → VaultHook → ShopManager（加载 DB 数据）→
- * PricingManager → EconomyManager → MarketManager（加载 items.yml + 启动桶滚动）→
+ * PricingManager → EconomyManager → MarketManager（加载 items.yml）→
  * NpcSkinCache（加载缓存 + 异步预加载）→ NpcPacketSender → PurchaseFormula → NpcManager → 注册监听器 →
  * 命令系统 → PlaceholderAPI 钩子。</p>
  *
@@ -130,7 +130,7 @@ public class WooSimMarket extends JavaPlugin {
         // 9. EconomyManager
         economyManager = new EconomyManager(vaultHook, shopManager);
 
-        // 10. 动态市场（72 桶滑动窗口调价，NpcManager 购买判定依赖此）
+        // 10. 物品价目表（加载 items.yml，NpcManager 购买判定依赖此）
         marketManager = new MarketManager(this, configLoader);
         marketManager.start();
 
@@ -186,7 +186,7 @@ public class WooSimMarket extends JavaPlugin {
         if (shelfDisplayManager != null) {
             shelfDisplayManager.clearAll();
         }
-        // 关闭动态市场（取消桶滚动任务）
+        // 关闭市场系统
         if (marketManager != null) {
             marketManager.stop();
         }
