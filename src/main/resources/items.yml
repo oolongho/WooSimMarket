@@ -1,20 +1,20 @@
 # WooSimMarket 标准价表
-# 每个条目定义物品的标准价格与可选 per-item 价格敏感度：
+# 每个条目定义物品的标准价格与可选价格敏感度：
 #   standard-price:    NPC 购买判定的标准价
-#   price-sensitivity: 价格敏感度（P 公式指数，默认用 market.yml 全局值）
+#   price-sensitivity: 价格敏感度（影响 P 公式指数中的价格因子，默认用 market.yml 全局值）
 
 items:
   DIAMOND:
     standard-price: 100.0
-    # 稀有物品：价格敏感度低于全局（提价影响更小）
-    price-sensitivity: 1.5
+    # 稀有物品，但可量产，价格敏感度稍微低于全局（提价影响更小）
+    price-sensitivity: 1.8
   IRON_INGOT:
     standard-price: 2.0
     # 常见物品：铁锭因为刷铁机的存在，设置价格敏感度更高
-    price-sensitivity: 3
+    price-sensitivity: 4
   BREAD:
     standard-price: 5.0
   GOLDEN_APPLE:
     standard-price: 200.0
-    # 稀有物品：价格敏感度低于全局（提价影响更小）
+    # 稀有物品，且一般不会卖，价格敏感度低于全局（提价影响更小）
     price-sensitivity: 1.2

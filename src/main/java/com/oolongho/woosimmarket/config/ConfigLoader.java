@@ -53,6 +53,12 @@ public class ConfigLoader {
     private int npcDeliberationMaxRolls;
     private int npcDeliberationIntervalMinTicks;
     private int npcDeliberationIntervalMaxTicks;
+    /** 生成系数：NPC 数 = min(max-concurrent, 启用货架数 × spawn-factor)。 */
+    private double npcSpawnFactor;
+    /** 换架概率（每次判定未命中后 roll）。 */
+    private double shelfSwitchProbability;
+    /** 换架超时秒数（超时后传送至目标）。 */
+    private int switchTimeoutSeconds;
 
     // market
     private double marketSensitivity;
@@ -167,6 +173,12 @@ public class ConfigLoader {
         // 保证 max >= min，避免区间退化
         npcDeliberationIntervalMaxTicks = Math.max(npcDeliberationIntervalMinTicks,
                 npcConfig.getInt("npc.deliberation.interval-max-ticks", 60));
+
+        // npc.spawn / npc.deliberation（换架行为，子系统 1.5）
+        npcSpawnFactor = Math.max(0.1, npcConfig.getDouble("npc.spawn.spawn-factor", 1.0));
+        shelfSwitchProbability = Math.max(0.0, Math.min(1.0,
+                npcConfig.getDouble("npc.deliberation.shelf-switch-probability", 0.3)));
+        switchTimeoutSeconds = Math.max(1, npcConfig.getInt("npc.deliberation.switch-timeout-seconds", 3));
 
         // market（从独立文件 market.yml 读取）
         marketSensitivity = Math.max(0.1, marketConfig.getDouble("market.sensitivity", 2.0));
@@ -343,6 +355,21 @@ public class ConfigLoader {
     /** NPC 徘徊判定间隔上限（impatience=0 时，ticks）。 */
     public int getNpcDeliberationIntervalMaxTicks() {
         return npcDeliberationIntervalMaxTicks;
+    }
+
+    /** 生成系数：NPC 数 = min(max-concurrent, 启用货架数 × spawn-factor)。 */
+    public double getNpcSpawnFactor() {
+        return npcSpawnFactor;
+    }
+
+    /** 换架概率（每次判定未命中后 roll）。 */
+    public double getShelfSwitchProbability() {
+        return shelfSwitchProbability;
+    }
+
+    /** 换架超时秒数（超时后传送至目标）。 */
+    public int getSwitchTimeoutSeconds() {
+        return switchTimeoutSeconds;
     }
 
     /** NPC 随机装备是否启用。 */

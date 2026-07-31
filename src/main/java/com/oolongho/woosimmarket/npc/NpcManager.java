@@ -133,7 +133,15 @@ public class NpcManager {
 
             switch (result) {
                 case MOVING -> packetSender.moveToNearby(npc, BROADCAST_RADIUS);
-                case REACHED -> handleReached(npc);
+                case REACHED -> {
+                    // SWITCHING 状态返回 REACHED 表示换架到达，走专门的恢复流程；
+                    // 其他状态（MOVING）返回 REACHED 表示初到货架，走 handleReached。
+                    if (npc.state() == SimNpc.State.SWITCHING) {
+                        handleSwitchArrival(npc);
+                    } else {
+                        handleReached(npc);
+                    }
+                }
                 case ROLL_DUE -> handleRoll(npc);
                 case STUCK -> {
                     plugin.getLogger().info(() -> "NPC " + npc.name() + " 卡住，销毁");
@@ -156,7 +164,7 @@ public class NpcManager {
      * @param npc 到达的 NPC
      */
     private void handleReached(SimNpc npc) {
-        Shelf shelf = shopManager.getShelf(npc.shelfId());
+        Shelf shelf = shopManager.getShelf(npc.currentShelfId());
         if (shelf == null || !shelf.canSell()) {
             // 货架不存在或无可售商品，直接离开
             npc.startLeaving();
@@ -196,7 +204,7 @@ public class NpcManager {
      * @param npc 处于 DELIBERATING 状态的 NPC
      */
     private void handleRoll(SimNpc npc) {
-        Shelf shelf = shopManager.getShelf(npc.shelfId());
+        Shelf shelf = shopManager.getShelf(npc.currentShelfId());
         if (shelf == null || !shelf.canSell()) {
             // 徘徊期间货架被买空/消失，立即回收展示并离开
             thoughtDisplayManager.despawn(npc);
@@ -215,14 +223,113 @@ public class NpcManager {
             return;
         }
 
-        // 未命中：判定耗尽则 flash GIVE_UP 并离开，否则切 HESITATE 等待下次 roll
+        // 未命中：判定耗尽则 flash GIVE_UP 并离开，否则 roll 换架概率
         if (npc.deliberationRollsDone() >= npc.deliberationTotalRolls()) {
             thoughtDisplayManager.flash(npc, Phase.GIVE_UP);
             marketManager.recordPurchaseOutcome(itemId, false);
             npc.startLeaving();
         } else {
-            thoughtDisplayManager.update(npc, Phase.HESITATE);
+            // roll 换架概率：命中则切换到另一可售货架，未命中则切 HESITATE 等待下次 roll
+            if (ThreadLocalRandom.current().nextDouble() < configLoader.getShelfSwitchProbability()) {
+                switchToRandomShelf(npc);
+            } else {
+                thoughtDisplayManager.update(npc, Phase.HESITATE);
+            }
         }
+    }
+
+    /**
+     * 尝试切换到商店内另一个可售货架。
+     *
+     * <p>由 {@link #handleRoll} 在判定未命中且 roll 命中换架概率时调用。
+     * 流程：从同商店的可售货架中排除当前货架，随机选一个作为目标；
+     * 无其他可售货架时不换，留在原架切 HESITATE。</p>
+     *
+     * <p>换架前先 {@link ThoughtDisplayManager#despawn} 移除旧货架的思考展示
+     * （换架期间 NPC 在移动，不展示思考文本）；到达后由
+     * {@link #handleSwitchArrival} 重新 spawn。</p>
+     *
+     * @param npc 处于 DELIBERATING 状态的 NPC
+     */
+    private void switchToRandomShelf(SimNpc npc) {
+        List<Shelf> shelves = shopManager.getShelvesByShop(npc.shopId());
+        List<Shelf> candidates = new ArrayList<>();
+        for (Shelf s : shelves) {
+            if (s.canSell() && !s.id().equals(npc.currentShelfId())) {
+                candidates.add(s);
+            }
+        }
+        if (candidates.isEmpty()) {
+            // 无其他可售货架，留原架
+            thoughtDisplayManager.update(npc, Phase.HESITATE);
+            return;
+        }
+
+        Shelf target = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        World world = npc.location().getWorld();
+        if (world == null) {
+            thoughtDisplayManager.update(npc, Phase.HESITATE);
+            return;
+        }
+
+        Location targetLoc = new Location(world, target.x() + 0.5, target.y(), target.z() + 0.5);
+        long deadline = System.currentTimeMillis() + configLoader.getSwitchTimeoutSeconds() * 1000L;
+
+        // 移除旧货架的思考展示（换架期间不展示）
+        thoughtDisplayManager.despawn(npc);
+
+        // 切换到新货架（state → SWITCHING）
+        npc.switchShelf(target.id(), targetLoc, deadline);
+
+        if (configLoader.isDebugGeneral()) {
+            plugin.getLogger().info(() -> String.format(
+                    "NPC %s 换架 → 货架 %s (%d,%d,%d)，超时 %ds",
+                    npc.name(), target.id(), target.x(), target.y(), target.z(),
+                    configLoader.getSwitchTimeoutSeconds()));
+        }
+    }
+
+    /**
+     * 换架到达后处理：重检货架可售性 → 重算 P → 回到 DELIBERATING。
+     *
+     * <p>由 {@link #tick} 在 SWITCHING 状态返回 REACHED 时调用。流程：
+     * <ol>
+     *   <li>查 shelf，不可售（被买空/消失）→ startLeaving 离开</li>
+     *   <li>重算 P（{@link PurchaseFormula#calculate}）：换架后价格/库存可能变化，
+     *       需重算；P&lt;=0 直接离开</li>
+     *   <li>更新缓存的 P（{@link SimNpc#updateDeliberationProbability}）</li>
+     *   <li>调 {@link SimNpc#resumeDeliberation()} 切回 DELIBERATING（不重置判定次数）</li>
+     *   <li>重新 spawn 思考展示（Phase.ENTER，新货架新思考）</li>
+     * </ol>
+     * </p>
+     *
+     * <p>注意：判定次数（rollsDone/totalRolls）不重置，NPC 在新货架上继续完成
+     * 剩余判定。这样换架是"换一个角度看商品"，而非"重新开始犹豫"。</p>
+     *
+     * @param npc 处于 SWITCHING 状态、刚到达新货架的 NPC
+     */
+    private void handleSwitchArrival(SimNpc npc) {
+        Shelf shelf = shopManager.getShelf(npc.currentShelfId());
+        if (shelf == null || !shelf.canSell()) {
+            // 货架被买空/消失，直接离开
+            npc.startLeaving();
+            return;
+        }
+
+        String itemId = getItemName(shelf.itemStack());
+        double userPrice = shelf.price();
+        double probability = purchaseFormula.calculate(
+                npc.personality(), itemId, userPrice, npc.location().getWorld());
+
+        if (probability <= 0.0) {
+            npc.startLeaving();
+            return;
+        }
+
+        // 更新缓存的 P，回到 DELIBERATING（判定次数不重置）
+        npc.updateDeliberationProbability(probability);
+        npc.resumeDeliberation();
+        thoughtDisplayManager.spawn(npc, Phase.ENTER);
     }
 
     /**
@@ -310,15 +417,27 @@ public class NpcManager {
     }
 
     /**
-     * 定时生成 NPC：遍历所有商店，未达上限则生成。
+     * 定时生成 NPC：遍历所有商店，补满至目标数量。
+     *
+     * <p>目标数量 = {@code min(max-concurrent, max(1, ceil(启用货架数 × spawn-factor)))}。
+     * 通过 while 循环补满，而非单次只生成 1 个，让 NPC 数量随货架数动态伸缩。
+     * 防御：若 trySpawnNpc 未成功生成（如货架为空），跳出避免死循环。</p>
      */
     private void scheduleSpawn() {
         for (Shop shop : shopManager.getAllShops()) {
-            int count = countNpcsByShop(shop.id());
-            if (count >= configLoader.getNpcMaxConcurrent()) {
-                continue;
+            int current = countNpcsByShop(shop.id());
+            // 计算目标数量：min(max-concurrent, 已启用可售货架数 × spawn-factor)
+            List<Shelf> shelves = shopManager.getShelvesByShop(shop.id());
+            long enabledCount = shelves.stream().filter(Shelf::canSell).count();
+            int targetCount = (int) Math.min(
+                    configLoader.getNpcMaxConcurrent(),
+                    Math.max(1, (int) Math.ceil(enabledCount * configLoader.getNpcSpawnFactor())));
+            while (countNpcsByShop(shop.id()) < targetCount) {
+                trySpawnNpc(shop);
+                // 防御：如果 trySpawnNpc 没有成功生成（如货架为空），跳出
+                if (countNpcsByShop(shop.id()) == current) break;
+                current = countNpcsByShop(shop.id());
             }
-            trySpawnNpc(shop);
         }
         scheduleNextSpawn();
     }

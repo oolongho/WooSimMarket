@@ -96,7 +96,9 @@ public class SimNpc {
         /** 到达货架，原地站立思考中（多次判定 + 计时器驱动） */
         DELIBERATING,
         /** 购买完成/判定耗尽，沿逆向路径离开中 */
-        LEAVING
+        LEAVING,
+        /** 换架中：在两货架间直线移动（带碰撞跳跃/绕行/超时传送兜底） */
+        SWITCHING
     }
 
     // 不可变字段
@@ -106,7 +108,8 @@ public class SimNpc {
     private final SkinData skin;
     private final Equipment equipment;
     private final String shopId;
-    private final String shelfId;
+    /** NPC 当前所在货架 ID（可变：换架时由 switchShelf 更新）。 */
+    private String currentShelfId;
     /** NPC 性格（spawn 时按权重随机分配，生命周期内不变，不持久化）。 */
     private final PersonalityProfile personality;
     private final long spawnTime;
@@ -132,7 +135,11 @@ public class SimNpc {
     private int deliberationIntervalTicks;
     private double deliberationProbability;
 
-    public SimNpc(UUID uuid, String name, SkinData skin, Equipment equipment, String shopId, String shelfId,
+    // 换架参数（SWITCHING 状态，由 switchShelf() 初始化）
+    private Location switchTargetLoc;
+    private long switchDeadline;
+
+    public SimNpc(UUID uuid, String name, SkinData skin, Equipment equipment, String shopId, String currentShelfId,
                   PersonalityProfile personality, Location spawnLocation,
                   double speed, double reachDistance,
                   int stuckThresholdSeconds, double stuckThresholdDistance) {
@@ -142,7 +149,7 @@ public class SimNpc {
         this.skin = skin;
         this.equipment = equipment;
         this.shopId = shopId;
-        this.shelfId = shelfId;
+        this.currentShelfId = currentShelfId;
         this.personality = personality;
         this.spawnTime = System.currentTimeMillis();
         this.location = spawnLocation.clone();
@@ -222,6 +229,9 @@ public class SimNpc {
     public TickResult tick() {
         if (state == State.DELIBERATING) {
             return tickDeliberating();
+        }
+        if (state == State.SWITCHING) {
+            return tickSwitching();
         }
         if (state != State.MOVING && state != State.LEAVING) {
             return TickResult.IDLE;
@@ -335,6 +345,87 @@ public class SimNpc {
     }
 
     /**
+     * SWITCHING 状态的 tick 逻辑：朝 {@link #switchTargetLoc} 直线移动，
+     * 带碰撞跳跃 / 左右绕行 / 超时传送兜底。
+     *
+     * <p>不同于 MOVING 的路径点跟随，SWITCHING 是两点直线移动：
+     * <ul>
+     *   <li>超时（{@link #switchDeadline}）→ 直接传送至目标，返回 REACHED</li>
+     *   <li>到达（3D 距离 &lt; {@link #reachDistance}）→ 返回 REACHED</li>
+     *   <li>前方 1 格高 + 上方可通行 → 跳上（my 提升至 1.0）</li>
+     *   <li>前方 2+ 格高 → 尝试右偏 / 左偏绕行；左右都不通则停在原位等超时</li>
+     * </ul>
+     * </p>
+     *
+     * <p>到达后 state 仍为 SWITCHING（不切换），由 NpcManager 调用
+     * {@link #resumeDeliberation()} 切回 DELIBERATING。</p>
+     *
+     * @return REACHED（到达/超时）/ MOVED（移动一步）/ IDLE（撞墙等待超时）
+     */
+    private TickResult tickSwitching() {
+        // 超时检测：超时直接传送至目标
+        if (System.currentTimeMillis() > switchDeadline) {
+            location.setX(switchTargetLoc.getX());
+            location.setY(switchTargetLoc.getY());
+            location.setZ(switchTargetLoc.getZ());
+            return TickResult.REACHED;
+        }
+
+        // 朝目标的方向向量
+        double dx = switchTargetLoc.getX() - location.getX();
+        double dy = switchTargetLoc.getY() - location.getY();
+        double dz = switchTargetLoc.getZ() - location.getZ();
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        // 到达判定
+        if (dist < reachDistance) {
+            return TickResult.REACHED;
+        }
+
+        // 归一化方向 × speed
+        double mx = (dx / dist) * speed;
+        double my = (dy / dist) * speed;
+        double mz = (dz / dist) * speed;
+
+        // 碰撞检测：检查前方方块
+        World world = location.getWorld();
+        if (world != null) {
+            Block nextBlock = world.getBlockAt(location.clone().add(mx, 0, mz));
+            Block feetBlock = world.getBlockAt(location.clone().add(mx, 1, mz));
+            if (nextBlock.getType().isSolid() && !feetBlock.getType().isSolid()) {
+                // 前方 1 格高 + 上方可通行 → 跳上
+                my = Math.max(my, 1.0);
+            } else if (nextBlock.getType().isSolid() && feetBlock.getType().isSolid()) {
+                // 前方 2+ 格高 → 尝试右偏（旋转 90°：-mz, mx）
+                double rmx = -mz;
+                double rmz = mx;
+                if (!world.getBlockAt(location.clone().add(rmx, 0, rmz)).getType().isSolid()) {
+                    mx = rmx;
+                    mz = rmz;
+                } else {
+                    // 右偏不通，尝试左偏（旋转 -90°：mz, -mx）
+                    double lmx = mz;
+                    double lmz = -mx;
+                    if (!world.getBlockAt(location.clone().add(lmx, 0, lmz)).getType().isSolid()) {
+                        mx = lmx;
+                        mz = lmz;
+                    } else {
+                        // 左右都不通 → 停在原位等超时兜底
+                        return TickResult.IDLE;
+                    }
+                }
+            }
+        }
+
+        // 更新 yaw 朝向移动方向（pitch=0 平视）
+        float yaw = (float) Math.toDegrees(Math.atan2(-mx, mz));
+
+        location.add(mx, my, mz);
+        location.setYaw(yaw);
+        return TickResult.MOVING;
+    }
+
+    /**
      * 切换到离开状态：逆向原路径返回。
      *
      * <p>将 {@link #path} 反转（终点变起点），重置 {@link #waypointIndex} 为 0，
@@ -346,6 +437,42 @@ public class SimNpc {
         }
         this.waypointIndex = 0;
         this.state = State.LEAVING;
+    }
+
+    /**
+     * 切换到新货架：更新 currentShelfId + 目标位置 + 超时时间 + 状态切换为 SWITCHING。
+     *
+     * <p>由 NpcManager.switchToRandomShelf 在判定未命中且 roll 命中换架概率时调用。
+     * 调用后 NPC 进入 SWITCHING 状态，tick 沿直线移动至 {@code targetLoc}，
+     * 到达或超时后由 NpcManager 调 {@link #resumeDeliberation()} 切回 DELIBERATING。</p>
+     *
+     * <p>注意：调用方应先 {@link ThoughtDisplayManager#despawn} 移除旧货架的思考展示，
+     * 换架期间不展示思考文本（NPC 在移动中）。</p>
+     *
+     * @param newShelfId    新货架 ID
+     * @param targetLoc     新货架位置（方块中心坐标）
+     * @param deadlineMillis 超时时间戳（{@link System#currentTimeMillis()}）
+     */
+    public void switchShelf(String newShelfId, Location targetLoc, long deadlineMillis) {
+        this.currentShelfId = newShelfId;
+        this.switchTargetLoc = targetLoc;
+        this.switchDeadline = deadlineMillis;
+        this.state = State.SWITCHING;
+    }
+
+    /**
+     * 换架到达后恢复徘徊：不重置判定次数，仅切换状态为 DELIBERATING。
+     *
+     * <p>由 NpcManager.handleSwitchArrival 在 NPC 换架到达后调用。P 已由外部
+     * {@link #updateDeliberationProbability} 更新；判定计数（rollsDone/totalRolls）
+     * 保留换架前的累计值，NPC 继续在新货架上完成剩余判定。</p>
+     *
+     * <p>计时器 {@code deliberationTicksUntilNextRoll} 设为 0，下一 tick 即
+     * 触发 ROLL_DUE，让 NpcManager 立即执行一次新货架的 roll。</p>
+     */
+    public void resumeDeliberation() {
+        this.deliberationTicksUntilNextRoll = 0;
+        this.state = State.DELIBERATING;
     }
 
     // ===== Getter =====
@@ -374,8 +501,8 @@ public class SimNpc {
         return shopId;
     }
 
-    public String shelfId() {
-        return shelfId;
+    public String currentShelfId() {
+        return currentShelfId;
     }
 
     /**
@@ -408,6 +535,15 @@ public class SimNpc {
     /** 缓存的购买概率（handleReached 时由 PurchaseFormula.calculate 计算一次）。 */
     public double deliberationProbability() {
         return deliberationProbability;
+    }
+
+    /**
+     * 更新缓存的购买概率（换架到达后由 NpcManager 调用，重算 P 后写回）。
+     *
+     * @param p 新概率 [0,1]
+     */
+    public void updateDeliberationProbability(double p) {
+        this.deliberationProbability = p;
     }
 
     public long spawnTime() {
