@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.oolongho'
-version = '0.1.0'
+version = 'alpha-0.1.0'
 
 java {
     // Paper 26.1+ 强制 JVM 25+，插件字节码目标同步改为 Java 25
