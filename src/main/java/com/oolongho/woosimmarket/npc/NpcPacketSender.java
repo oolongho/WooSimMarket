@@ -151,8 +151,9 @@ public class NpcPacketSender {
         }
 
         // 3.5 设置自定义名标签（性格前缀 + baseName，含 MiniMessage 颜色）
-        //    反射失败或前缀缺失时跳过；GameProfile.name 已含纯文本前缀作为降级显示
-        if (customNameId >= 0 && customNameVisibleId >= 0 && !npc.personality().name().equals("normal")) {
+        //    反射失败或前缀为空时跳过；GameProfile.name 已含纯文本前缀作为降级显示
+        String prefixMini = messages.getPersonalityPrefix(npc.personality().name());
+        if (customNameId >= 0 && customNameVisibleId >= 0 && !prefixMini.isEmpty()) {
             sendPacket(player, createCustomNamePacket(npc.entityId(), displayName));
         }
 
@@ -412,7 +413,7 @@ public class NpcPacketSender {
      *
      * <p>前缀来自 lang 文件（{@code personality-prefix-{key}}，含尾部空格分隔，
      * MiniMessage 格式，抹茶绿 #a3b547）。总可见字符数超过 {@value #MC_NAME_LIMIT}
-     * 时截断 baseName，前缀完整保留。normal 性格返回纯 baseName 字面 Component。</p>
+     * 时截断 baseName，前缀完整保留。前缀为空时返回纯 baseName 字面 Component（normal 默认前缀为空）。</p>
      *
      * <p>解析失败时降级为 {@link #buildPlainDisplayName} 的字面 Component。</p>
      *
@@ -423,7 +424,7 @@ public class NpcPacketSender {
         String baseName = npc.name();
         String prefixMini = messages.getPersonalityPrefix(npc.personality().name());
         if (prefixMini.isEmpty()) {
-            // normal 或缺失前缀：返回纯 baseName
+            // 前缀为空（normal 默认或缺失前缀）：返回纯 baseName
             return Component.text(baseName);
         }
         String truncatedBase = truncateBaseName(baseName, prefixMini);
@@ -439,7 +440,7 @@ public class NpcPacketSender {
      * 构造 NPC 纯文本显示名（用于 GameProfile.name，受 16 字符上限）。
      *
      * <p>MiniMessage 标签剥离后的前缀 + 截断后的 baseName，总长 ≤ 16。
-     * normal 性格返回纯 baseName。</p>
+     * 前缀为空时返回纯 baseName（normal 默认前缀为空）。</p>
      *
      * @param npc NPC
      * @return 纯文本显示名

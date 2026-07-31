@@ -39,7 +39,9 @@ withdraw-no-balance: "{prefix}<color:#F59E0B>商店余额为 0，无可提现。
 npc-stuck: "<color:#9CA3AF>NPC 卡住已销毁。</color>"
 npc-purchased: "<color:#10B981>{npc} 购买了 {item}，单价 {price}。</color>"
 
-# normal 性格无前缀，仅 12 种极端性格定义前缀
+# NPC 性格前缀（MiniMessage 格式，统一抹茶绿 #a3b547，含尾部空格分隔）
+# normal 性格前缀默认留空（无前缀），用户可自定义（如 "<color:#a3b547>[顾客]</color> ")
+personality-prefix-normal: ""
 personality-prefix-generous: "<color:#a3b547>[慷慨]</color> "
 personality-prefix-stingy: "<color:#a3b547>[吝啬]</color> "
 personality-prefix-trend-follower: "<color:#a3b547>[跟风]</color> "

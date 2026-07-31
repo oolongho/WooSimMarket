@@ -32,7 +32,9 @@ withdraw-no-balance: "{prefix}<color:#F59E0B>Shop balance is 0, nothing to withd
 npc-stuck: "<color:#9CA3AF>NPC stuck and despawned.</color>"
 npc-purchased: "<color:#10B981>{npc} bought {item} for {price}.</color>"
 
-# normal personality has no prefix; only 12 extreme personalities define prefixes
+# NPC personality prefixes (MiniMessage, matcha green #a3b547, trailing space included)
+# normal personality prefix defaults to empty (no prefix); users may customize (e.g. "<color:#a3b547>[Customer]</color> ")
+personality-prefix-normal: ""
 personality-prefix-generous: "<color:#a3b547>[Generous]</color> "
 personality-prefix-stingy: "<color:#a3b547>[Stingy]</color> "
 personality-prefix-trend-follower: "<color:#a3b547>[Trendy]</color> "
