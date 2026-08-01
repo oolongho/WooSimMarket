@@ -231,6 +231,9 @@ public class WooSimMarket extends JavaPlugin {
     public void reload() {
         configLoader.reload();
         messages.reload();
+        if (marketManager != null) {
+            marketManager.reload();
+        }
         if (personalityManager != null) {
             personalityManager.reload(configLoader.getNpcConfig());
         }

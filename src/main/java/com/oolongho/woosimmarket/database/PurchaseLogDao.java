@@ -25,9 +25,9 @@ public class PurchaseLogDao {
             INSERT INTO purchase_log (shop_id, item_id, price, bought, personality, timestamp)
             VALUES (?, ?, ?, ?, ?, ?)""";
 
-    private static final String SQL_FIND_RECENT_BY_SHOP = """
+    private static final String SQL_FIND_RECENT_BY_SHOP_SINCE = """
             SELECT id, shop_id, item_id, price, bought, personality, timestamp
-            FROM purchase_log WHERE shop_id=? ORDER BY id DESC LIMIT ?""";
+            FROM purchase_log WHERE shop_id=? AND timestamp>=? ORDER BY id DESC LIMIT ?""";
 
     private static final String SQL_DELETE_OLDER_THAN =
             "DELETE FROM purchase_log WHERE timestamp<?";
@@ -70,20 +70,25 @@ public class PurchaseLogDao {
     }
 
     /**
-     * 按商店 id 查询最近的若干条购买日志（id 倒序）。
+     * 按商店 id 查询自指定时间起的购买日志（timestamp>=since，id 倒序，LIMIT 保护）。
      *
-     * @param shopId 商店 id，null 时返回空列表
-     * @param limit  最大返回条数，{@code <=0} 时返回空列表
+     * <p>供统计面板查询真正"近 N 天"记录使用：调用方传入 {@code now - retentionDays×86400000}
+     * 作为 since，{@code queryLimit} 作为 LIMIT 上限防止极端数据量。</p>
+     *
+     * @param shopId     商店 id，null 时返回空列表
+     * @param sinceMillis 时间戳下限（毫秒），仅返回 {@code timestamp >= 此值} 的记录
+     * @param limit      最大返回条数，{@code <=0} 时返回空列表
      * @return 日志记录列表，失败时返回空列表
      */
-    public List<PurchaseLogRecord> findRecentByShop(String shopId, int limit) {
+    public List<PurchaseLogRecord> findRecentByShopSince(String shopId, long sinceMillis, int limit) {
         if (shopId == null || limit <= 0) {
             return List.of();
         }
         db.getLock().lock();
-        try (PreparedStatement ps = db.getConnection().prepareStatement(SQL_FIND_RECENT_BY_SHOP)) {
+        try (PreparedStatement ps = db.getConnection().prepareStatement(SQL_FIND_RECENT_BY_SHOP_SINCE)) {
             ps.setString(1, shopId);
-            ps.setInt(2, limit);
+            ps.setLong(2, sinceMillis);
+            ps.setInt(3, limit);
             List<PurchaseLogRecord> list = new ArrayList<>();
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -92,7 +97,8 @@ public class PurchaseLogDao {
             }
             return list;
         } catch (SQLException | RuntimeException e) {
-            db.getLogger().severe(() -> "Failed to find recent purchase logs for shop " + shopId + ": " + e.getMessage());
+            db.getLogger().severe(() -> "Failed to find recent purchase logs for shop " + shopId
+                    + " since " + sinceMillis + ": " + e.getMessage());
             return List.of();
         } finally {
             db.getLock().unlock();
@@ -102,8 +108,8 @@ public class PurchaseLogDao {
     /**
      * 按物品 ID 查询近 N 天的所有判定记录（含 bought=0/1），供漂移计算使用。
      *
-     * <p>SQL 走 item_id 过滤 + timestamp 下限，无新索引（当前数据量全表扫可接受；
-     * 数据量增长后可加 idx_purchase_log_item_id 索引优化）。</p>
+     * <p>SQL 走 item_id 过滤 + timestamp 下限，由 {@code idx_purchase_log_item_id}
+     * 复合索引优化（覆盖 WHERE item_id=? AND timestamp>=? 查询）。</p>
      *
      * @param itemId 物品 ID，null 时返回空列表
      * @param days   查询天数，{@code <=0} 时返回空列表

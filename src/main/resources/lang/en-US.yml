@@ -101,7 +101,7 @@ gui-stats-rate: "<yellow>Purchase Rate</yellow>"
 gui-stats-revenue: "<yellow>Total Revenue</yellow>"
 gui-stats-avg-price: "<yellow>Avg Bought Price</yellow>"
 gui-stats-window: "<yellow>Statistics Window</yellow>"
-gui-stats-window-lore: "<gray>Based on recent {limit} records</gray>"
+gui-stats-window-lore: "<gray>Last {days} days</gray>"
 gui-stats-refresh: "<yellow>Refresh</yellow>"
 gui-stats-empty: "<gray>No transaction records</gray>"
 gui-shop-stats: "<color:#5EEAD4>Stats Panel</color>"
@@ -131,6 +131,7 @@ command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket Commands</bold></color>
 command-give-success: "{prefix}<color:#10B981>Gave {item} to {player}.</color>"
 command-info: "{prefix}<color:#9CA3AF>Shop info: ID={id} balance={balance}</color>"
 command-list: "{prefix}<color:#9CA3AF>{player}'s shops: {shops}</color>"
+command-drift-recompute: "{prefix}<color:#10B981>Drift recompute task triggered asynchronously.</color>"
 
 # NPC thought display (subsystem 4, 13 personalities × 4 phases = 52 entries, flow-mapping style)
 # Phase keys: enter / hesitate / buy / give-up

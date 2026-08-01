@@ -1,7 +1,7 @@
 # WooSimMarket 标准价表
 # 每个条目定义物品的标准价格与可选价格敏感度：
 #   standard-price:    标准价（NPC 购买判定的基准价）
-#   price-sensitivity: 物品价格敏感度（价格因子的指数基准，默认用 market.yml 全局值）
+#   price-sensitivity: 物品价格敏感度（价格因子的指数基准，-1 表示用 market.yml 全局值，默认可省略）
 
 items:
   DIAMOND:

@@ -50,8 +50,9 @@ public class MarketManager {
     private final ConfigLoader configLoader;
     private final PurchaseLogDao purchaseLogDao;
 
-    /** 物品标准价表（itemId → ItemInfo）。 */
-    private final Map<String, ItemInfo> itemInfos = new HashMap<>();
+    /** 物品标准价表（itemId → ItemInfo）。
+     *  ConcurrentHashMap：异步 recomputeDrift 遍历 + 主线程 reload 写，需线程安全。 */
+    private final Map<String, ItemInfo> itemInfos = new ConcurrentHashMap<>();
 
     /** 购买动量 EMA 表（itemId → 动量值 ∈[0,1]，缺省 0.5 中性）。不持久化，重启归零。 */
     private final Map<String, Double> purchaseEma = new HashMap<>();
@@ -95,6 +96,27 @@ public class MarketManager {
             cleanupTask.cancel();
             cleanupTask = null;
         }
+    }
+
+    /**
+     * 重载 items.yml 物品标准价表（clear + 重新加载，确保已删除物品不再残留）。
+     *
+     * <p>主线程调用；与异步 recomputeDrift 遍历并发，{@link ConcurrentHashMap} 保证线程安全。
+     * purchaseEma 与 priceDrift 不重载（运行时状态，跨 reload 连续）。</p>
+     */
+    public void reload() {
+        itemInfos.clear();
+        loadItems();
+    }
+
+    /**
+     * 立即异步重算所有物品的漂移乘数（手动触发，供 {@code /wsm drift recompute} 调用）。
+     *
+     * <p>异步执行 {@link #recomputeDrift}，主线程不阻塞。
+     * drift.enabled=false 时为空操作。频繁调用无副作用（幂等重算）。</p>
+     */
+    public void recomputeDriftNow() {
+        TaskUtil.runAsync(plugin, this::recomputeDrift);
     }
 
     /**

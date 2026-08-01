@@ -115,13 +115,16 @@ public class StatsGui implements InventoryHolder {
     // ===== 异步加载与渲染 =====
 
     /**
-     * 异步查询近期购买日志，主线程渲染聚合结果。查询上限取
-     * {@code stats.query-limit}（{@link com.oolongho.woosimmarket.config.ConfigLoader#getStatsQueryLimit}）。
+     * 异步查询近 {@code stats.retention-days} 天的购买日志，主线程渲染聚合结果。
+     * 查询上限取 {@code stats.query-limit}（{@link com.oolongho.woosimmarket.config.ConfigLoader#getStatsQueryLimit}）
+     * 作为 LIMIT 保护，防止极端数据量。
      */
     private void loadAndRender() {
         TaskUtil.runAsync(plugin, () -> {
-            List<PurchaseLogRecord> records = dao.findRecentByShop(
-                    shop.id(), plugin.getConfigLoader().getStatsQueryLimit());
+            long sinceMillis = System.currentTimeMillis()
+                    - plugin.getConfigLoader().getStatsRetentionDays() * 86400000L;
+            List<PurchaseLogRecord> records = dao.findRecentByShopSince(
+                    shop.id(), sinceMillis, plugin.getConfigLoader().getStatsQueryLimit());
             TaskUtil.run(plugin, () -> renderContents(records));
         });
     }
@@ -219,7 +222,7 @@ public class StatsGui implements InventoryHolder {
      * 渲染 7 张总览卡片（总判定/总收入/成交/拒绝/购买率/平均成交价/统计窗口）。
      */
     private void renderOverviewCards(ShopStats stats) {
-        int queryLimit = plugin.getConfigLoader().getStatsQueryLimit();
+        int retentionDays = plugin.getConfigLoader().getStatsRetentionDays();
         inventory.setItem(OVERVIEW_SLOTS[0], createCard(Material.PAPER,
                 "gui-stats-total-attempts", "gui-stats-total-attempts-lore",
                 "value", String.valueOf(stats.totalAttempts())));
@@ -240,7 +243,7 @@ public class StatsGui implements InventoryHolder {
                 "value", plugin.getEconomyManager().format(stats.avgBoughtPrice())));
         inventory.setItem(OVERVIEW_SLOTS[6], createCard(Material.BOOK,
                 "gui-stats-window", "gui-stats-window-lore",
-                "limit", String.valueOf(queryLimit)));
+                "days", String.valueOf(retentionDays)));
     }
 
     /**

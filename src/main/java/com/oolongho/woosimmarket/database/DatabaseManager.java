@@ -147,6 +147,10 @@ public class DatabaseManager {
     private static final String SQL_CREATE_PURCHASE_LOG_INDEX =
             "CREATE INDEX IF NOT EXISTS idx_purchase_log_shop_id ON purchase_log(shop_id, id DESC)";
 
+    /** item_id + timestamp 复合索引，优化 findRecentByItem（漂移重算）的 WHERE item_id=? AND timestamp>=? 过滤。 */
+    private static final String SQL_CREATE_PURCHASE_LOG_ITEM_INDEX =
+            "CREATE INDEX IF NOT EXISTS idx_purchase_log_item_id ON purchase_log(item_id, timestamp)";
+
     private final JavaPlugin plugin;
     private final String fileName;
     private volatile Connection connection;
@@ -199,6 +203,7 @@ public class DatabaseManager {
                 stmt.execute(SQL_CREATE_SHELVES_INDEX);
                 stmt.execute(SQL_CREATE_PURCHASE_LOG);
                 stmt.execute(SQL_CREATE_PURCHASE_LOG_INDEX);
+                stmt.execute(SQL_CREATE_PURCHASE_LOG_ITEM_INDEX);
             }
 
             // 旧库迁移：若 shops 表缺少 notify_enabled 列则添加

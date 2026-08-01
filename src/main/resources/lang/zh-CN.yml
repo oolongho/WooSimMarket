@@ -103,7 +103,7 @@ gui-stats-rate: "<yellow>购买率</yellow>"
 gui-stats-revenue: "<yellow>总收入</yellow>"
 gui-stats-avg-price: "<yellow>平均成交价</yellow>"
 gui-stats-window: "<yellow>统计窗口</yellow>"
-gui-stats-window-lore: "<gray>基于近期 {limit} 条记录</gray>"
+gui-stats-window-lore: "<gray>近 {days} 天交易记录</gray>"
 gui-stats-refresh: "<yellow>刷新</yellow>"
 gui-stats-empty: "<gray>暂无交易记录</gray>"
 gui-shop-stats: "<color:#5EEAD4>统计面板</color>"
@@ -133,6 +133,7 @@ command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket 命令</bold></color>"
 command-give-success: "{prefix}<color:#10B981>已将 {item} 给予 {player}。</color>"
 command-info: "{prefix}<color:#9CA3AF>商店信息：ID={id} 余额={balance}</color>"
 command-list: "{prefix}<color:#9CA3AF>{player} 的商店列表：{shops}</color>"
+command-drift-recompute: "{prefix}<color:#10B981>漂移重算任务已在异步线程触发。</color>"
 
 # NPC 头顶思考展示（子系统 4，13 性格 × 4 阶段 = 52 条，flow-mapping 风格）
 # 阶段键：enter（进入徘徊）/ hesitate（未命中余量）/ buy（命中）/ give-up（耗尽）
