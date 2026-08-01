@@ -66,6 +66,16 @@ public class ConfigLoader {
     private double marketTimeStrength;
     private double marketMomentumStrength;
 
+    // market.drift（动态标准价漂移）
+    private boolean driftEnabled;
+    private int driftWindowDays;
+    private double driftPriceWeight;
+    private double driftSupplyWeight;
+    private double driftMeanReversion;
+    private double driftDailyCap;
+    private double driftMinFactor;
+    private double driftMaxFactor;
+
     // skin
     private List<String> skinNames;
     private String skinCacheFile;
@@ -186,6 +196,18 @@ public class ConfigLoader {
         marketTimeStrength = Math.max(0.0, marketConfig.getDouble("market.time-strength", 1.0));
         marketMomentumStrength = Math.max(0.0, marketConfig.getDouble("market.momentum-strength", 0.3));
 
+        // market.drift（动态标准价漂移）
+        driftEnabled = marketConfig.getBoolean("market.drift.enabled", true);
+        // window-days 兜底：不超过 stats.retention-days，避免查询窗口超过日志保留期导致数据不全
+        int rawWindowDays = Math.max(1, marketConfig.getInt("market.drift.window-days", 7));
+        driftWindowDays = Math.min(rawWindowDays, Math.max(1, config.getInt("stats.retention-days", 7)));
+        driftPriceWeight = Math.max(0.0, marketConfig.getDouble("market.drift.price-weight", 0.5));
+        driftSupplyWeight = Math.max(0.0, marketConfig.getDouble("market.drift.supply-weight", 0.3));
+        driftMeanReversion = Math.max(0.0, marketConfig.getDouble("market.drift.mean-reversion", 0.1));
+        driftDailyCap = Math.max(0.0, marketConfig.getDouble("market.drift.daily-cap", 0.05));
+        driftMinFactor = Math.max(0.01, marketConfig.getDouble("market.drift.min-factor", 0.5));
+        driftMaxFactor = Math.max(driftMinFactor, marketConfig.getDouble("market.drift.max-factor", 2.0));
+
         // skin（从 npc.yml 读取）
         skinNames = npcConfig.getStringList("skin.names");
         if (skinNames.isEmpty()) {
@@ -254,6 +276,28 @@ public class ConfigLoader {
         loadMarketConfig();
         loadNpcConfig();
         loadValues();
+    }
+
+    /**
+     * 漂移计算参数聚合 record，供 {@link com.oolongho.woosimmarket.market.DriftCalculator} 接收。
+     *
+     * @param windowDays    统计窗口天数
+     * @param priceWeight   价格偏离权重
+     * @param supplyWeight  购买率权重
+     * @param meanReversion 均值回归强度
+     * @param dailyCap      日幅度上限
+     * @param minFactor     drift 下限
+     * @param maxFactor     drift 上限
+     */
+    public record DriftConfig(
+            int windowDays,
+            double priceWeight,
+            double supplyWeight,
+            double meanReversion,
+            double dailyCap,
+            double minFactor,
+            double maxFactor
+    ) {
     }
 
     // ===== Getter =====
@@ -425,6 +469,46 @@ public class ConfigLoader {
     /** 购买动量因子强度（marketFactor 幅度，0=禁用动量，0.3=默认）。 */
     public double getMarketMomentumStrength() {
         return marketMomentumStrength;
+    }
+
+    /** 动态标准价漂移是否启用（关闭时 effectiveStandardPrice ≡ standardPrice）。 */
+    public boolean isDriftEnabled() {
+        return driftEnabled;
+    }
+
+    /** 漂移统计窗口天数（已兜底不超过 stats.retention-days）。 */
+    public int getDriftWindowDays() {
+        return driftWindowDays;
+    }
+
+    public double getDriftPriceWeight() {
+        return driftPriceWeight;
+    }
+
+    public double getDriftSupplyWeight() {
+        return driftSupplyWeight;
+    }
+
+    public double getDriftMeanReversion() {
+        return driftMeanReversion;
+    }
+
+    public double getDriftDailyCap() {
+        return driftDailyCap;
+    }
+
+    public double getDriftMinFactor() {
+        return driftMinFactor;
+    }
+
+    public double getDriftMaxFactor() {
+        return driftMaxFactor;
+    }
+
+    /** 聚合 drift 计算参数为 record，供 DriftCalculator 接收。 */
+    public DriftConfig getDriftConfig() {
+        return new DriftConfig(driftWindowDays, driftPriceWeight, driftSupplyWeight,
+                driftMeanReversion, driftDailyCap, driftMinFactor, driftMaxFactor);
     }
 
     /**

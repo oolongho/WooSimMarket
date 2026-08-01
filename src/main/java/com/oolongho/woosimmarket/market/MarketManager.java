@@ -13,7 +13,9 @@ import org.bukkit.scheduler.BukkitTask;
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 物品价目表与购买动量管理器。
@@ -28,6 +30,11 @@ import java.util.Map;
  *
  * <p>职责三：将每次购买判定结果异步写入 {@code purchase_log} 表（供统计面板查询），
  * 并按 {@code stats.retention-days}（默认 7 天）每日异步清理过期记录。</p>
+ *
+ * <p>职责四：维护每物品的漂移乘数 priceDrift，让 effectiveStandardPrice 根据近期成交价中位数
+ * 与购买率缓慢漂移（模拟市场均衡价）。drift 不持久化，重启由 cleanupTask 初始延迟 0 异步重算
+ * （跨重启连续）。计算由 {@link DriftCalculator} 纯函数承担，每日异步执行 1 次（复用 cleanupTask
+ * 24h 时段），主线程仅读 priceDrift（ConcurrentHashMap 保证线程安全）。</p>
  *
  * <p>线程模型：EMA 更新与配置查询在主线程执行；purchase_log 写入与清理通过
  * {@link TaskUtil} 投递到异步线程，避免阻塞主线程。</p>
@@ -49,6 +56,10 @@ public class MarketManager {
     /** 购买动量 EMA 表（itemId → 动量值 ∈[0,1]，缺省 0.5 中性）。不持久化，重启归零。 */
     private final Map<String, Double> purchaseEma = new HashMap<>();
 
+    /** 漂移乘数表（itemId → drift ∈ [minFactor, maxFactor]，缺省 1.0）。不持久化，重启由 cleanupTask 重算。
+     *  ConcurrentHashMap：异步 recomputeDrift 写 + 主线程 getEffectiveStandardPrice 读，需线程安全。 */
+    private final Map<String, Double> priceDrift = new ConcurrentHashMap<>();
+
     /** EMA 平滑系数（新结果贡献 30%，历史 70%）。 */
     private static final double EMA_ALPHA = 0.3;
 
@@ -69,8 +80,11 @@ public class MarketManager {
      */
     public void start() {
         loadItems();
-        // 每日一次异步清理（24h = 24×60×60×20 ticks），初始延迟 0 立即执行首次清理
-        cleanupTask = TaskUtil.runAsyncAtFixed(plugin, this::cleanupPurchaseLog, 0L, 24L * 60 * 60 * 20);
+        // 每日一次异步：先清理过期日志，再重算漂移（24h = 24×60×60×20 ticks）
+        // 初始延迟 0：启动后立即异步执行首次 recompute（跨重启连续，主线程 0 阻塞）
+        cleanupTask = TaskUtil.runAsyncAtFixed(plugin,
+                () -> { cleanupPurchaseLog(); recomputeDrift(); },
+                0L, 24L * 60 * 60 * 20);
     }
 
     /**
@@ -111,6 +125,35 @@ public class MarketManager {
     public double getStandardPrice(String itemId) {
         ItemInfo info = itemInfos.get(itemId);
         return info != null ? info.standardPrice() : DEFAULT_BASE_PRICE;
+    }
+
+    /**
+     * 获取物品的有效标准价（含漂移）。
+     *
+     * <p>{@code effectiveStandardPrice = standardPrice × priceDrift}，供 {@link PurchaseFormula}
+     * 的 budget 硬门与 priceFactor 基准使用。drift 缺省 1.0（等价 standardPrice）。
+     * drift.enabled=false 时直接返回 standardPrice（强制契约：禁用即等价未引入，无视 map 残留值）。</p>
+     *
+     * @param itemId 物品 ID
+     * @return 有效标准价
+     */
+    public double getEffectiveStandardPrice(String itemId) {
+        if (!configLoader.isDriftEnabled()) {
+            return getStandardPrice(itemId);
+        }
+        return getStandardPrice(itemId) * priceDrift.getOrDefault(itemId, 1.0);
+    }
+
+    /**
+     * 获取物品的当前漂移乘数（供 GUI 显示箭头与 debug 日志）。
+     *
+     * <p>drift.enabled=false 时返回 1.0（强制契约：禁用即等价未引入）。</p>
+     *
+     * @param itemId 物品 ID
+     * @return drift 乘数，缺省 1.0
+     */
+    public double getPriceDrift(String itemId) {
+        return configLoader.isDriftEnabled() ? priceDrift.getOrDefault(itemId, 1.0) : 1.0;
     }
 
     /**
@@ -168,6 +211,30 @@ public class MarketManager {
     private void cleanupPurchaseLog() {
         long retentionDays = configLoader.getStatsRetentionDays();
         purchaseLogDao.deleteOlderThan(System.currentTimeMillis() - retentionDays * 86400000L);
+    }
+
+    /**
+     * 重算所有物品的漂移乘数（异步调用，主线程不阻塞）。
+     *
+     * <p>遍历 itemInfos，对每个 itemId 查询近 window-days 天 purchase_log 记录，
+     * 调用 {@link DriftCalculator#computeDrift} 更新 priceDrift。
+     * drift.enabled=false 时直接 return（drift 恒为 1.0）。空样本跳过（drift 不变）。</p>
+     */
+    private void recomputeDrift() {
+        if (!configLoader.isDriftEnabled()) {
+            return;
+        }
+        ConfigLoader.DriftConfig cfg = configLoader.getDriftConfig();
+        for (String itemId : itemInfos.keySet()) {
+            List<DatabaseManager.PurchaseLogRecord> records = purchaseLogDao.findRecentByItem(itemId, cfg.windowDays());
+            if (records.isEmpty()) {
+                continue; // 空样本跳过，drift 保持当前值
+            }
+            double stdPrice = getStandardPrice(itemId);
+            double currentDrift = priceDrift.getOrDefault(itemId, 1.0);
+            double newDrift = DriftCalculator.computeDrift(currentDrift, stdPrice, records, cfg);
+            priceDrift.put(itemId, newDrift);
+        }
     }
 
     /**

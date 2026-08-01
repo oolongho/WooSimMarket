@@ -12,10 +12,10 @@ import org.bukkit.World;
  * + 购买动量 momentum，输出 [0,1] 概率。budget 为硬门提前返回 0；其余因子乘性合成后钳制到 [0,1]。
  * 不钳制单个因子，允许各因子 &gt;1（低价/日间/热销加成），相乘后统一收敛。</p>
  *
- * <p>公式：
+ * <p>公式（effectiveStandardPrice = standardPrice × priceDrift，含漂移）：
  * <pre>
- * 预算硬门：userPrice &gt; budget × standardPrice → P=0
- * 价格因子 = (standardPrice / userPrice) ^ effectiveSensitivity
+ * 预算硬门：userPrice &gt; budget × effectiveStandardPrice → P=0
+ * 价格因子 = (effectiveStandardPrice / userPrice) ^ effectiveSensitivity
  *      effectiveSensitivity = getItemPriceSensitivity(itemId) × personality.priceSensitivity
  * 天气因子 = 1 − weatherSensitivity × (hasStorm ? 1 : 0)
  * 时间因子 = 1 + timeStrength × (timePreference − 0.5) × 2 × (dayNess − 0.5)
@@ -54,21 +54,23 @@ public class PurchaseFormula {
         }
 
         boolean dbg = configLoader.isDebugPurchase();
-        double standardPrice = marketManager.getStandardPrice(itemId);
+        // 有效标准价（含漂移）：drift 影响 budget 硬门与 priceFactor 基准，使 NPC 响应市场均衡价
+        double standardPrice = marketManager.getEffectiveStandardPrice(itemId);
+        double drift = marketManager.getPriceDrift(itemId);
 
-        // 预算硬门：budget 是公平价倍数，基准用 standardPrice 不随供需波动
+        // 预算硬门：budget 是公平价倍数，基准用 effectiveStandardPrice（含漂移）随市场均衡波动
         double budgetLimit = personality.budget() * standardPrice;
         if (userPrice > budgetLimit) {
             if (dbg) {
                 Bukkit.getLogger().info(String.format(
-                    "[WooSimMarket][Purchase] %s/%s price=%.2f > budget门=%.2f(%.1f×%.2f) → P=0.000 拒绝",
+                    "[WooSimMarket][Purchase] %s/%s price=%.2f > budget门=%.2f(%.1f×%.2f, drift=%.2f) → P=0.000 拒绝",
                     personality.name(), itemId, userPrice, budgetLimit,
-                    personality.budget(), standardPrice));
+                    personality.budget(), standardPrice, drift));
             }
             return 0.0;
         }
 
-        // 价格因子（standardPrice 作为唯一价格基准，所见即所得）
+        // 价格因子（effectiveStandardPrice 含漂移，作为价格基准）
         double effectiveSensitivity = marketManager.getItemPriceSensitivity(itemId) * personality.priceSensitivity();
         double priceFactor = Math.pow(standardPrice / userPrice, effectiveSensitivity);
 
@@ -91,8 +93,8 @@ public class PurchaseFormula {
 
         if (dbg) {
             Bukkit.getLogger().info(String.format(
-                "[WooSimMarket][Purchase] %s/%s price=%.2f std=%.2f | budget门=%.2f通过 | priceF=%.3f(sens=%.2f) | weather=%.2f time=%.2f(dayNess=%.2f) marketF=%.3f(mom=%.2f) global=%.2f | → P=%.3f",
-                personality.name(), itemId, userPrice, standardPrice, budgetLimit,
+                "[WooSimMarket][Purchase] %s/%s price=%.2f effStd=%.2f(drift=%.2f) | budget门=%.2f通过 | priceF=%.3f(sens=%.2f) | weather=%.2f time=%.2f(dayNess=%.2f) marketF=%.3f(mom=%.2f) global=%.2f | → P=%.3f",
+                personality.name(), itemId, userPrice, standardPrice, drift, budgetLimit,
                 priceFactor, effectiveSensitivity,
                 weatherFactor, timeFactor, dayNess, marketFactor, momentum, globalMult, p));
         }

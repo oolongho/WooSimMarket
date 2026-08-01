@@ -154,6 +154,6 @@ public class ShopGuiListener implements Listener {
      * 标准价表按钮：打开标准价表面板。
      */
     private void handlePriceTableClick(ShopGui gui, Player player) {
-        new PriceTableGui(gui.getShop(), economyManager, plugin.getMarketManager(), messages).open(player);
+        new PriceTableGui(gui.getShop(), economyManager, plugin.getMarketManager(), messages, plugin.getConfigLoader()).open(player);
     }
 }

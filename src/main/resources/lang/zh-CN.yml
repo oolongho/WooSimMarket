@@ -110,6 +110,7 @@ gui-price-table-prev: "<white>上一页</white>"
 gui-price-table-next: "<white>下一页</white>"
 gui-price-table-page: "<white>{current}/{total}</white>"
 gui-price-table-item-lore: "<gray>标准价 </gray><color:#F59E0B>{price}</color>"
+gui-price-table-item-lore-drift: "<gray>当前市价 </gray><color:#10B981>{drifted}</color> <color:#9CA3AF>{arrow}</color>"
 
 # 命令
 command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket 命令</bold></color>"

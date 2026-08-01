@@ -1,5 +1,6 @@
 package com.oolongho.woosimmarket.gui;
 
+import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
 import com.oolongho.woosimmarket.market.MarketManager;
@@ -49,16 +50,19 @@ public class PriceTableGui implements InventoryHolder {
     private final EconomyManager economyManager;
     private final MarketManager marketManager;
     private final Messages messages;
+    private final ConfigLoader configLoader;
     private final Inventory inventory;
     private final List<Map.Entry<String, ItemInfo>> entries;
     private final int totalPages;
     private int currentPage;
 
-    public PriceTableGui(Shop shop, EconomyManager economyManager, MarketManager marketManager, Messages messages) {
+    public PriceTableGui(Shop shop, EconomyManager economyManager, MarketManager marketManager,
+                         Messages messages, ConfigLoader configLoader) {
         this.shop = shop;
         this.economyManager = economyManager;
         this.marketManager = marketManager;
         this.messages = messages;
+        this.configLoader = configLoader;
         this.inventory = Bukkit.createInventory(this, SIZE, messages.get("gui-price-table-title"));
         this.entries = new ArrayList<>(marketManager.getItemInfos().entrySet());
         this.entries.sort(Map.Entry.comparingByKey());
@@ -127,8 +131,19 @@ public class PriceTableGui implements InventoryHolder {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.displayName(Component.text(itemId));
-            meta.lore(List.of(messages.get("gui-price-table-item-lore",
-                    "price", economyManager.format(info.standardPrice()))));
+            List<Component> lore = new ArrayList<>();
+            lore.add(messages.get("gui-price-table-item-lore",
+                    "price", economyManager.format(info.standardPrice())));
+            // drift.enabled=true 时追加漂移后价行 + 箭头
+            if (configLoader.isDriftEnabled()) {
+                double drift = marketManager.getPriceDrift(itemId);
+                double effStd = info.standardPrice() * drift;
+                String arrow = drift > 1.005 ? "↑" : (drift < 0.995 ? "↓" : "−");
+                lore.add(messages.get("gui-price-table-item-lore-drift",
+                        "drifted", economyManager.format(effStd),
+                        "arrow", arrow));
+            }
+            meta.lore(lore);
             item.setItemMeta(meta);
         }
         return item;

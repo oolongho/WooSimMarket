@@ -108,6 +108,7 @@ gui-price-table-prev: "<white>Previous</white>"
 gui-price-table-next: "<white>Next</white>"
 gui-price-table-page: "<white>{current}/{total}</white>"
 gui-price-table-item-lore: "<gray>Price </gray><color:#F59E0B>{price}</color>"
+gui-price-table-item-lore-drift: "<gray>Market </gray><color:#10B981>{drifted}</color> <color:#9CA3AF>{arrow}</color>"
 
 # Commands
 command-help: "{prefix}<color:#5EEAD4><bold>WooSimMarket Commands</bold></color>"

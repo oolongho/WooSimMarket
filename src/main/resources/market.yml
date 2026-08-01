@@ -5,13 +5,13 @@
 # 总式：P = clamp[0,1]( 全局意愿 × 价格因子 × 天气因子 × 时间因子 × 市场因子 )
 #
 # 预算（门槛，非乘性因子）
-#   售价 > 性格预算 × 标准价 → P=0（直接拒绝）
-#   例：normal 性格（budget=2.0），标准价=2.0 → 最高接受 2.0×2.0=4.0
+#   售价 > 性格预算 × 有效标准价（standardPrice × priceDrift） → P=0（直接拒绝）
+#   例：normal 性格（budget=2.0），有效标准价=2.0 → 最高接受 2.0×2.0=4.0
 #
 # 价格因子（公平价=1.0）
 #   effectiveSensitivity = 物品价格敏感度 × 性格价格敏感度
-#   价格因子 = (标准价 / 售价) ^ effectiveSensitivity
-#   例：标准价=2.0，售价=1.6（8 折），effectiveSensitivity=5 → (2/1.6)^5=2.44（打折加成）
+#   价格因子 = (有效标准价 / 售价) ^ effectiveSensitivity
+#   例：有效标准价=2.0，售价=1.6（8 折），effectiveSensitivity=5 → (2/1.6)^5=2.44（打折加成）
 #   售价<标准价（打折）→ >1 | 售价=标准价 → 1 | 售价>标准价（加价）→ <1
 #
 # 天气因子（好天气=1.0）
@@ -44,6 +44,29 @@ market:
   # trend-follower[跟风]性格（market-sensitivity=1.8）在热销品（动量=1.0）上 +54%，冷门品（动量=0.0）上 -54%
   # independent[独立]性格（market-sensitivity=0.3）仅 ±5%，几乎不受影响
   momentum-strength: 0.3
+
+  # 动态标准价漂移：标准价根据近期成交价中位数与购买率缓慢漂移，模拟市场均衡价
+  # 每日异步执行 1 次（复用 cleanupTask 时段，主线程 0 影响），重启从 purchase_log 重算
+  # 性能影响：每日 1 次异步任务，单次耗时 <50ms（4 物品 × 查询近 7 天日志 + 排序中位数）
+  # 内存影响：每物品 1 个 double（可忽略）
+  # 防刷机制：中位数抗离群 + 日幅度上限 + 均值回归 + 购买率负反馈（高价挂单反向下漂）
+  drift:
+    # 是否启用（关闭时 effectiveStandardPrice ≡ standardPrice，完全向后兼容）
+    enabled: true
+    # 统计窗口天数（仅用近 N 天 purchase_log；自动兜底不超过 stats.retention-days）
+    window-days: 7
+    # 价格偏离权重（近期成交价中位数相对有效标准价的偏离敏感度）
+    price-weight: 0.5
+    # 购买率权重（购买率偏离 0.5 的幅度，正=供不应求涨价，负=供过于求降价）
+    supply-weight: 0.3
+    # 均值回归强度（每日将 drift 向 1.0 拉回的比例，防长期失控）
+    mean-reversion: 0.1
+    # 日幅度上限（±0.05=每日最多漂移 5%）
+    daily-cap: 0.05
+    # drift 下限（0.5=标准价最低腰斩）
+    min-factor: 0.5
+    # drift 上限（2.0=标准价最高翻倍）
+    max-factor: 2.0
 
 # 商店配置
 shop:

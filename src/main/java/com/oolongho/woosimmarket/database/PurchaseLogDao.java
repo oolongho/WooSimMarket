@@ -32,6 +32,10 @@ public class PurchaseLogDao {
     private static final String SQL_DELETE_OLDER_THAN =
             "DELETE FROM purchase_log WHERE timestamp<?";
 
+    private static final String SQL_FIND_RECENT_BY_ITEM = """
+            SELECT id, shop_id, item_id, price, bought, personality, timestamp
+            FROM purchase_log WHERE item_id=? AND timestamp>=? ORDER BY id""";
+
     private final DatabaseManager db;
 
     public PurchaseLogDao(DatabaseManager db) {
@@ -89,6 +93,40 @@ public class PurchaseLogDao {
             return list;
         } catch (SQLException | RuntimeException e) {
             db.getLogger().severe(() -> "Failed to find recent purchase logs for shop " + shopId + ": " + e.getMessage());
+            return List.of();
+        } finally {
+            db.getLock().unlock();
+        }
+    }
+
+    /**
+     * 按物品 ID 查询近 N 天的所有判定记录（含 bought=0/1），供漂移计算使用。
+     *
+     * <p>SQL 走 item_id 过滤 + timestamp 下限，无新索引（当前数据量全表扫可接受；
+     * 数据量增长后可加 idx_purchase_log_item_id 索引优化）。</p>
+     *
+     * @param itemId 物品 ID，null 时返回空列表
+     * @param days   查询天数，{@code <=0} 时返回空列表
+     * @return 日志记录列表，失败时返回空列表
+     */
+    public List<PurchaseLogRecord> findRecentByItem(String itemId, int days) {
+        if (itemId == null || days <= 0) {
+            return List.of();
+        }
+        long since = System.currentTimeMillis() - days * 86400000L;
+        db.getLock().lock();
+        try (PreparedStatement ps = db.getConnection().prepareStatement(SQL_FIND_RECENT_BY_ITEM)) {
+            ps.setString(1, itemId);
+            ps.setLong(2, since);
+            List<PurchaseLogRecord> list = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(map(rs));
+                }
+            }
+            return list;
+        } catch (SQLException | RuntimeException e) {
+            db.getLogger().severe(() -> "Failed to find recent purchase logs for item " + itemId + ": " + e.getMessage());
             return List.of();
         } finally {
             db.getLock().unlock();
