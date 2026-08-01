@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * 商店领域模型（可变）。
  *
- * <p>除 {@code balance} 可变外其余字段不可变。与 {@link ShopRecord} 双向转换：
+ * <p>{@code balance} 与 {@code name} 可变，其余字段不可变。与 {@link ShopRecord} 双向转换：
  * {@link #fromRecord(ShopRecord)} 构造实例，{@link #toRecord()} 序列化为 DAO 入参。</p>
  *
  * <p>位置以 world + x + y + z 整数方块坐标存储，facing 存枚举名字符串（NORTH/SOUTH/EAST/WEST）。</p>
@@ -25,9 +25,10 @@ public class Shop {
     private final String facing;
     private double balance;
     private final long createdAt;
+    private String name;
 
     public Shop(String id, UUID ownerUuid, String world, int x, int y, int z,
-                String facing, double balance, long createdAt) {
+                String facing, double balance, long createdAt, String name) {
         this.id = id;
         this.ownerUuid = ownerUuid;
         this.world = world;
@@ -37,6 +38,7 @@ public class Shop {
         this.facing = facing;
         this.balance = balance;
         this.createdAt = createdAt;
+        this.name = name;
     }
 
     /**
@@ -55,7 +57,8 @@ public class Shop {
                 record.z(),
                 record.facing(),
                 record.balance(),
-                record.createdAt()
+                record.createdAt(),
+                record.name()
         );
     }
 
@@ -65,7 +68,7 @@ public class Shop {
      * @return ShopRecord 实例
      */
     public ShopRecord toRecord() {
-        return new ShopRecord(id, ownerUuid, world, x, y, z, facing, balance, createdAt);
+        return new ShopRecord(id, ownerUuid, world, x, y, z, facing, balance, createdAt, name);
     }
 
     /**
@@ -111,6 +114,21 @@ public class Shop {
 
     public long createdAt() {
         return createdAt;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    /**
+     * 设置店名（trim 后非空才写入）。null/空白忽略。
+     *
+     * @param name 新店名
+     */
+    public void name(String name) {
+        if (name != null && !name.isBlank()) {
+            this.name = name.trim();
+        }
     }
 
     /**

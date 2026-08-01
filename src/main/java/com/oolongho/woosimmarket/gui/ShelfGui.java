@@ -16,29 +16,34 @@ import java.util.List;
 /**
  * 货架管理 GUI（InventoryHolder 模式）。
  *
- * <p>27 格箱子布局：
+ * <p>27 格箱子布局（# 边框 / A 商品槽 / B 价格按钮 / C 开关按钮）：
+ * <pre>
+ * ###AAA###
+ * #B#AAA#C#
+ * ###AAA###
+ * </pre>
  * <ul>
- *   <li>slot 13：商品槽（玩家放入/取出物品，amount = stock）</li>
- *   <li>slot 11：设价按钮（点击 → 关闭 GUI → 聊天定价）</li>
- *   <li>slot 15：启用/禁用按钮（点击切换状态）</li>
+ *   <li>9 个商品槽 {3,4,5,12,13,14,21,22,23}：玩家放入/取出物品，打开时按 maxStackSize 分配 stock</li>
+ *   <li>slot 10：价格按钮（绑定后图标变为绑定物品 Material + 附魔光效，未绑定为 GOLD_INGOT）</li>
+ *   <li>slot 16：启用/禁用按钮</li>
  *   <li>其余：灰色玻璃边框（不可交互）</li>
  * </ul></p>
  *
- * <p>通过 {@link InventoryHolder} 标识 GUI，
- * {@link com.oolongho.woosimmarket.gui.ShelfGuiListener} 据此判断事件归属。</p>
+ * <p>物品绑定：玩家放入第一个物品时按 Material 绑定，之后仅允许同种类放入 9 格。
+ * 关闭时汇总 9 格 stock；9 格全空则解绑（itemStack=null, stock=0）。</p>
  *
  * @author oolongho
  */
 public class ShelfGui implements InventoryHolder {
 
-    /** 商品槽位。 */
-    public static final int SLOT_ITEM = 13;
-    /** 设价按钮槽位。 */
-    public static final int SLOT_PRICE = 11;
-    /** 启用/禁用按钮槽位。 */
-    public static final int SLOT_TOGGLE = 15;
     /** GUI 大小。 */
     public static final int SIZE = 27;
+    /** 价格按钮槽位。 */
+    public static final int SLOT_PRICE = 10;
+    /** 启用/禁用按钮槽位。 */
+    public static final int SLOT_TOGGLE = 16;
+    /** 9 个商品槽（按行序，用于 stock 分配与汇总）。 */
+    public static final int[] ITEM_SLOTS = {3, 4, 5, 12, 13, 14, 21, 22, 23};
 
     private final Shelf shelf;
     private final Inventory inventory;
@@ -50,25 +55,15 @@ public class ShelfGui implements InventoryHolder {
         render(messages);
     }
 
-    /**
-     * 渲染 GUI 内容：边框 + 商品 + 按钮。
-     */
     private void render(Messages messages) {
         ItemStack border = createBorder();
         for (int i = 0; i < SIZE; i++) {
-            if (i != SLOT_ITEM && i != SLOT_PRICE && i != SLOT_TOGGLE) {
+            if (!isItemSlot(i) && i != SLOT_PRICE && i != SLOT_TOGGLE) {
                 inventory.setItem(i, border);
             }
         }
-
-        // 商品槽：显示 itemStack 的克隆，amount = min(stock, maxStackSize)
-        if (shelf.itemStack() != null && !shelf.itemStack().getType().isAir() && shelf.stock() > 0) {
-            ItemStack display = shelf.itemStack().clone();
-            display.setAmount(Math.min(shelf.stock(), display.getMaxStackSize()));
-            inventory.setItem(SLOT_ITEM, display);
-        }
-
-        inventory.setItem(SLOT_PRICE, createPriceButton(shelf.price(), messages));
+        distributeStock();
+        inventory.setItem(SLOT_PRICE, createPriceButton(persistentBoundMaterial(), shelf.price(), messages));
         inventory.setItem(SLOT_TOGGLE, createToggleButton(shelf.enabled(), messages));
     }
 
@@ -82,29 +77,68 @@ public class ShelfGui implements InventoryHolder {
     }
 
     /**
-     * 刷新按钮显示（切换启用/禁用后更新按钮材质与文案）。
-     *
-     * <p>不清空商品槽——玩家可能已放入物品但尚未关闭 GUI（itemStack 仅在关闭时持久化），
-     * 清空会导致物品丢失。</p>
+     * 刷新价格与开关按钮（不清空商品槽，玩家可能已放入物品）。
      *
      * @param messages 消息管理器
      */
     public void refresh(Messages messages) {
-        inventory.setItem(SLOT_PRICE, createPriceButton(shelf.price(), messages));
+        inventory.setItem(SLOT_PRICE, createPriceButton(persistentBoundMaterial(), shelf.price(), messages));
         inventory.setItem(SLOT_TOGGLE, createToggleButton(shelf.enabled(), messages));
     }
 
     /**
-     * 获取商品槽的当前物品（关闭 GUI 时调用，用于持久化）。
-     *
-     * @return 商品槽物品；空槽返回 null
+     * 打开时将 stock 按 maxStackSize 分配到 9 个商品槽（前 N 格满叠 + 1 格余量）。
      */
-    public ItemStack getItemSlotContent() {
-        ItemStack item = inventory.getItem(SLOT_ITEM);
-        if (item == null || item.getType().isAir()) {
-            return null;
+    private void distributeStock() {
+        ItemStack template = shelf.itemStack();
+        if (template == null || template.getType().isAir() || shelf.stock() <= 0) {
+            return;
         }
-        return item;
+        int remaining = shelf.stock();
+        int maxStack = template.getMaxStackSize();
+        for (int slot : ITEM_SLOTS) {
+            if (remaining <= 0) {
+                break;
+            }
+            int amt = Math.min(remaining, maxStack);
+            ItemStack display = template.clone();
+            display.setAmount(amt);
+            inventory.setItem(slot, display);
+            remaining -= amt;
+        }
+    }
+
+    /**
+     * 汇总 9 个商品槽的物品总数（关闭时调用，用于持久化 stock）。
+     *
+     * @return 9 格物品 amount 之和；全空返回 0
+     */
+    public int collectStock() {
+        int total = 0;
+        for (int slot : ITEM_SLOTS) {
+            ItemStack it = inventory.getItem(slot);
+            if (it != null && !it.getType().isAir()) {
+                total += it.getAmount();
+            }
+        }
+        return total;
+    }
+
+    /**
+     * 取 9 个商品槽中首个非空物品作为模板（clone 后 amount=1）；全空返回 null。
+     *
+     * @return 模板物品（amount=1）或 null
+     */
+    public ItemStack collectTemplate() {
+        for (int slot : ITEM_SLOTS) {
+            ItemStack it = inventory.getItem(slot);
+            if (it != null && !it.getType().isAir()) {
+                ItemStack template = it.clone();
+                template.setAmount(1);
+                return template;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -117,13 +151,39 @@ public class ShelfGui implements InventoryHolder {
     }
 
     /**
+     * 当前活体绑定材质（点击/拖拽校验用）：优先取 9 格中首个物品，回落到 shelf 持久化物品；均无返回 null。
+     *
+     * @return 绑定材质，未绑定返回 null
+     */
+    public Material liveBoundMaterial() {
+        for (int slot : ITEM_SLOTS) {
+            ItemStack it = inventory.getItem(slot);
+            if (it != null && !it.getType().isAir()) {
+                return it.getType();
+            }
+        }
+        return persistentBoundMaterial();
+    }
+
+    /**
      * 判断槽位是否为商品槽。
      */
     public static boolean isItemSlot(int slot) {
-        return slot == SLOT_ITEM;
+        for (int s : ITEM_SLOTS) {
+            if (s == slot) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    // ===== 按钮创建（MiniMessage 渲染） =====
+    // ===== 内部 =====
+
+    /** 持久化绑定材质（shelf.itemStack），用于渲染价格按钮。 */
+    private Material persistentBoundMaterial() {
+        ItemStack is = shelf.itemStack();
+        return (is != null && !is.getType().isAir()) ? is.getType() : null;
+    }
 
     private static ItemStack createBorder() {
         ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
@@ -135,12 +195,22 @@ public class ShelfGui implements InventoryHolder {
         return item;
     }
 
-    private static ItemStack createPriceButton(double price, Messages messages) {
-        ItemStack item = new ItemStack(Material.GOLD_INGOT);
+    /**
+     * 价格按钮：绑定后图标为绑定物品 Material + 附魔光效，未绑定为 GOLD_INGOT。
+     */
+    private static ItemStack createPriceButton(Material boundMaterial, double price, Messages messages) {
+        boolean bound = boundMaterial != null && !boundMaterial.isAir();
+        ItemStack item = new ItemStack(bound ? boundMaterial : Material.GOLD_INGOT);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.displayName(messages.get("gui-shelf-set-price"));
-            meta.lore(List.of(messages.get("gui-shelf-current-price", "price", String.format("%.2f", price))));
+            meta.lore(List.of(
+                    messages.get("gui-shelf-current-price", "price", String.format("%.2f", price)),
+                    messages.get(bound ? "gui-shelf-bound" : "gui-shelf-unbound")));
+            if (bound) {
+                // 附魔光效：setEnchantmentGlintOverride 仅添加视觉光效，不附加伪附魔/无需隐藏 flag
+                meta.setEnchantmentGlintOverride(true);
+            }
             item.setItemMeta(meta);
         }
         return item;

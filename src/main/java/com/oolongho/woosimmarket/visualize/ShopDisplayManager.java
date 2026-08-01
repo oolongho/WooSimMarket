@@ -133,10 +133,6 @@ public class ShopDisplayManager {
             return;
         }
 
-        // 店主名：优先 OfflinePlayer.getName，缺失时取 UUID 前 8 位兜底
-        String rawName = Bukkit.getOfflinePlayer(shop.ownerUuid()).getName();
-        final String ownerName = (rawName != null) ? rawName : shop.ownerUuid().toString().substring(0, 8);
-
         // ItemDisplay：店主头颅，billboard 视角跟随玩家
         Location headLoc = new Location(world,
                 shop.x() + 0.5, shop.y() + configLoader.getShopDisplayHeadYOffset(), shop.z() + 0.5);
@@ -158,24 +154,57 @@ public class ShopDisplayManager {
             markDisplayEntity(entity, shop.id());
         });
 
-        // TextDisplay：店名，billboard 视角跟随玩家
+        // TextDisplay：店名（取自 shop.name），billboard 视角跟随玩家
         Location nameLoc = new Location(world,
                 shop.x() + 0.5, shop.y() + configLoader.getShopDisplayNameYOffset(), shop.z() + 0.5);
         TextDisplay textDisplay = world.spawn(nameLoc, TextDisplay.class, entity -> {
-            entity.setBillboard(Display.Billboard.CENTER);
-            // 读取配置的店名颜色
-            String textColorHex = configLoader.getShopDisplayTextColor();
-            TextColor textColor = TextColor.fromHexString(textColorHex);
-            // 店名文本（语言文件提供纯文本模板，颜色由配置控制）
-            Component nameComponent = messages.get("gui-shop-billboard-name", "owner", ownerName);
-            if (textColor != null) {
-                nameComponent = nameComponent.color(textColor);
-            }
-            entity.text(nameComponent);
+            // VERTICAL：仅水平旋转朝向玩家，垂直方向固定（店名不上下俯仰）
+            entity.setBillboard(Display.Billboard.VERTICAL);
+            entity.text(buildShopNameComponent(shop));
             markDisplayEntity(entity, shop.id());
         });
 
         handlesByShopId.put(shop.id(), new ShopDisplayHandle(itemDisplay.getUniqueId(), textDisplay.getUniqueId()));
+    }
+
+    /**
+     * 原地更新店名 TextDisplay 文本（改名时调用，避免 remove+spawn 闪烁）。
+     *
+     * <p>仅在展示已存在且实体在线时更新；展示不存在或区块未加载时静默跳过
+     * （下次 {@link #onChunkLoad} 或 {@link #refreshShop} 会用新名字重建）。</p>
+     *
+     * @param shop 商店（读取 shop.name 作为新文本）
+     */
+    public void updateShopName(Shop shop) {
+        ShopDisplayHandle handle = handlesByShopId.get(shop.id());
+        if (handle == null) {
+            return;
+        }
+        try {
+            Entity entity = Bukkit.getEntity(handle.textDisplayUuid());
+            if (entity instanceof TextDisplay textDisplay && entity.isValid()) {
+                textDisplay.text(buildShopNameComponent(shop));
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning(() ->
+                    "更新店名展示失败 shopId=" + shop.id() + "：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 构建店名 Component：取 shop.name，颜色由配置控制（Component.text 不解析 MiniMessage 标签，安全）。
+     *
+     * @param shop 商店
+     * @return 店名 Component
+     */
+    private Component buildShopNameComponent(Shop shop) {
+        Component nameComponent = Component.text(shop.name());
+        String textColorHex = configLoader.getShopDisplayTextColor();
+        TextColor textColor = TextColor.fromHexString(textColorHex);
+        if (textColor != null) {
+            nameComponent = nameComponent.color(textColor);
+        }
+        return nameComponent;
     }
 
     /**

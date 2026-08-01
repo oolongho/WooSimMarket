@@ -14,15 +14,15 @@ import org.bukkit.World;
  *
  * <p>公式：
  * <pre>
- * ① budget 硬门：userPrice &gt; budget × standardPrice → P=0
- * ② priceFactor = (standardPrice / userPrice) ^ effectiveSensitivity
+ * 预算硬门：userPrice &gt; budget × standardPrice → P=0
+ * 价格因子 = (standardPrice / userPrice) ^ effectiveSensitivity
  *      effectiveSensitivity = getItemPriceSensitivity(itemId) × personality.priceSensitivity
- * ③ weatherFactor = 1 − weatherSensitivity × (hasStorm ? 1 : 0)
- * ④ timeFactor    = 1 + timeStrength × (timePreference − 0.5) × 2 × (dayNess − 0.5)
+ * 天气因子 = 1 − weatherSensitivity × (hasStorm ? 1 : 0)
+ * 时间因子 = 1 + timeStrength × (timePreference − 0.5) × 2 × (dayNess − 0.5)
  *      dayNess = (cos(2π × (time − 6000) / 24000) + 1) / 2   // 正午=1 半夜=0
- * ⑤ marketFactor = 1 + momentumStrength × (momentum − 0.5) × 2 × personality.marketSensitivity
+ * 市场因子 = 1 + momentumStrength × (momentum − 0.5) × 2 × personality.marketSensitivity
  *      momentum = MarketManager.getPurchaseMomentum(itemId)   // EMA∈[0,1], 默认0.5
- * ⑥ P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × marketFactor × globalMult )
+ * 合成 P = clamp[0,1]( priceFactor × weatherFactor × timeFactor × marketFactor × globalMult )
  * </pre></p>
  *
  * <p>线程模型：仅主线程调用（NpcManager.handleReached）。无可变字段，纯函数。</p>
@@ -56,7 +56,7 @@ public class PurchaseFormula {
         boolean dbg = configLoader.isDebugPurchase();
         double standardPrice = marketManager.getStandardPrice(itemId);
 
-        // ① budget 硬门：budget 是公平价倍数，基准用 standardPrice 不随供需波动
+        // 预算硬门：budget 是公平价倍数，基准用 standardPrice 不随供需波动
         double budgetLimit = personality.budget() * standardPrice;
         if (userPrice > budgetLimit) {
             if (dbg) {
@@ -68,24 +68,24 @@ public class PurchaseFormula {
             return 0.0;
         }
 
-        // ② priceFactor（standardPrice 作为唯一价格基准，所见即所得）
+        // 价格因子（standardPrice 作为唯一价格基准，所见即所得）
         double effectiveSensitivity = marketManager.getItemPriceSensitivity(itemId) * personality.priceSensitivity();
         double priceFactor = Math.pow(standardPrice / userPrice, effectiveSensitivity);
 
-        // ③ weatherFactor
+        // 天气因子
         double weatherFactor = 1.0 - personality.weatherSensitivity() * (world.hasStorm() ? 1.0 : 0.0);
 
-        // ④ timeFactor（中性 timePreference=0.5 时恒=1）
+        // 时间因子（中性 timePreference=0.5 时恒=1）
         double timeStrength = configLoader.getMarketTimeStrength();
         double dayNess = (Math.cos(2.0 * Math.PI * (world.getTime() - 6000) / 24000.0) + 1.0) / 2.0;
         double timeFactor = 1.0 + timeStrength * (personality.timePreference() - 0.5) * 2.0 * (dayNess - 0.5);
 
-        // ⑤ marketFactor（momentum=0.5 时恒=1，向后兼容；trend-follower 强跟风，independent 几乎不受影响）
+        // 市场因子（momentum=0.5 时恒=1，向后兼容；trend-follower 强跟风，independent 几乎不受影响）
         double momentumStrength = configLoader.getMarketMomentumStrength();
         double momentum = marketManager.getPurchaseMomentum(itemId);
         double marketFactor = 1.0 + momentumStrength * (momentum - 0.5) * 2.0 * personality.marketSensitivity();
 
-        // ⑥ 合成并钳制最终概率
+        // 合成并钳制最终概率
         double globalMult = configLoader.getMarketGlobalMultiplier();
         double p = Math.max(0.0, Math.min(1.0, priceFactor * weatherFactor * timeFactor * marketFactor * globalMult));
 

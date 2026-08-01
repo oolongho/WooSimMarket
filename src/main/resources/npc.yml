@@ -5,11 +5,9 @@ npc:
   spawn-interval-min: 30
   spawn-interval-max: 180
   # 每个商店同时存在的 NPC 上限
-  max-concurrent: 5
+  max-concurrent: 10
   # 生成系数：NPC数 = min(max-concurrent, 已启用货架数 × spawn-factor)
-  # 例如 3 个启用货架 × 1.0 = 最多 3 个 NPC（受 max-concurrent 约束）
-  # 0.5 = 每 2 个货架才生成 1 个 NPC；2.0 = 每个货架生成 2 个 NPC
-  spawn-factor: 1.0
+  spawn-factor: 2.0
   # 卡住判定：连续 N 秒位移不足 threshold-distance 则销毁
   stuck-threshold-seconds: 15
   stuck-threshold-distance: 5.0
@@ -104,8 +102,9 @@ thought-display:
   # BUY/GIVE_UP 结果文本停留时长（ticks）
   flash-duration-ticks: 40
   # 朝向模式：CENTER / FIXED / VERTICAL / HORIZONTAL
-  # 配置无效时默认 CENTER
-  billboard: CENTER
+  # VERTICAL：仅水平旋转朝向玩家，垂直方向固定（不上下俯仰）
+  # 配置无效时默认 VERTICAL
+  billboard: VERTICAL
   # 背景色 RGBA，配置无效时默认 0,0,0,64
   background-color: "0,0,0,64"
   # 文本阴影
@@ -116,21 +115,21 @@ thought-display:
 # WooSimMarket NPC 性格配置
 #
 # 6 个数值维度
-#   price-sensitivity   价格敏感度倍率（≥0，倍率 × 全局/物品级 sensitivity）
+#   price-sensitivity   性格价格敏感度（≥0，乘以全局/物品级敏感度作为指数）
 #                       高=对价格更敏感，低=对价格不敏感
 #
-#   market-sensitivity  购买动量敏感度倍率（≥0，参与 marketFactor 计算）
+#   market-sensitivity  性格市场敏感度（≥0，参与市场因子计算）
 #                       高=跟风购买，低=独立判断
 #
 #   impatience          冲动度（[0,1]，0=极慢决策，1=极快决策）
 #                       用于决定判定次数与间隔
 #
-#   budget              预算倍率（≥0，最多花 budget × standardPrice）
+#   budget              性格预算（≥0，最多接受 budget × 标准价 的售价）
 #                       超过此硬上限则购买概率=0
 #
-#   weather-sensitivity 天气敏感度（[0,1]，0=不受影响，1=坏天气不想买）
+#   weather-sensitivity 性格天气敏感度（[0,1]，0=不受影响，1=坏天气不想买）
 #
-#   time-preference     时间偏好（[0,1]，0=夜型，1=日型，0.5=中性）
+#   time-preference     性格时间偏好（[0,1]，0=夜型，1=日型，0.5=中性）
 #
 # weight 字段
 #   NPC生成时按 weight / totalWeight 概率分配
@@ -149,7 +148,7 @@ thought-display:
 #     price-sensitivity: 1.0
 #     market-sensitivity: 1.0
 #     impatience: 0.5
-#     budget: 3.0
+#     budget: 2.0
 #     weather-sensitivity: 0.3
 #     time-preference: 0.5
 #
@@ -162,7 +161,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.5
 
@@ -172,7 +171,7 @@ personalities:
     price-sensitivity: 0.4
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.5
   stingy: # [吝啬] 对价格高度敏感
@@ -180,7 +179,7 @@ personalities:
     price-sensitivity: 2.0
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.5
 
@@ -190,7 +189,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.8
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.5
   independent: # [独立] 少受市场影响
@@ -198,7 +197,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 0.3
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.5
 
@@ -208,7 +207,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.90
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.5
   patient: # [耐心] 决策慢
@@ -216,7 +215,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.10
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.5
 
@@ -226,7 +225,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 6.0
+    budget: 3.0
     weather-sensitivity: 0.3
     time-preference: 0.5
   poor: # [贫穷] 预算低
@@ -244,7 +243,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.9
     time-preference: 0.5
   all-weather: # [全天候] 天气不影响
@@ -252,7 +251,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.0
     time-preference: 0.5
 
@@ -262,7 +261,7 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 1.0
   night-owl: # [夜猫] 夜晚购买意愿高
@@ -270,6 +269,6 @@ personalities:
     price-sensitivity: 1.0
     market-sensitivity: 1.0
     impatience: 0.5
-    budget: 3.0
+    budget: 2.0
     weather-sensitivity: 0.3
     time-preference: 0.0

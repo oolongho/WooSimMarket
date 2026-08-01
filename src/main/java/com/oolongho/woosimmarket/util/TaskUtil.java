@@ -12,6 +12,8 @@ import org.bukkit.scheduler.BukkitTask;
  *
  * <p>所有方法在插件禁用时自动取消任务（BukkitTask 绑定 plugin，onDisable 自动清理）。</p>
  *
+ * <p>另提供 {@link #runAsyncAtFixed} 用于周期性异步任务（如每日清理旧记录）。</p>
+ *
  * @author oolongho
  */
 public final class TaskUtil {
@@ -64,5 +66,18 @@ public final class TaskUtil {
      */
     public static BukkitTask runAtFixed(WooSimMarket plugin, Runnable runnable, long delay, long period) {
         return Bukkit.getScheduler().runTaskTimer(plugin, runnable, delay, period);
+    }
+
+    /**
+     * 在异步线程定时重复执行任务。
+     *
+     * @param plugin   插件实例
+     * @param runnable 任务
+     * @param delay    首次延迟（tick）
+     * @param period   重复间隔（tick）
+     * @return BukkitTask
+     */
+    public static BukkitTask runAsyncAtFixed(WooSimMarket plugin, Runnable runnable, long delay, long period) {
+        return Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, runnable, delay, period);
     }
 }

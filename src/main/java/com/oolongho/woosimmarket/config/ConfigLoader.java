@@ -175,7 +175,7 @@ public class ConfigLoader {
                 npcConfig.getInt("npc.deliberation.interval-max-ticks", 60));
 
         // npc.spawn / npc.deliberation（换架行为，子系统 1.5）
-        npcSpawnFactor = Math.max(0.1, npcConfig.getDouble("npc.spawn.spawn-factor", 1.0));
+        npcSpawnFactor = Math.max(0.1, npcConfig.getDouble("npc.spawn-factor", 1.0));
         shelfSwitchProbability = Math.max(0.0, Math.min(1.0,
                 npcConfig.getDouble("npc.deliberation.shelf-switch-probability", 0.3)));
         switchTimeoutSeconds = Math.max(1, npcConfig.getInt("npc.deliberation.switch-timeout-seconds", 3));
@@ -204,9 +204,9 @@ public class ConfigLoader {
         thoughtDisplayFlashDurationTicks = Math.max(1, npcConfig.getInt("thought-display.flash-duration-ticks", 40));
         try {
             thoughtDisplayBillboard = Display.Billboard.valueOf(
-                    npcConfig.getString("thought-display.billboard", "CENTER").toUpperCase());
+                    npcConfig.getString("thought-display.billboard", "VERTICAL").toUpperCase());
         } catch (IllegalArgumentException ex) {
-            thoughtDisplayBillboard = Display.Billboard.CENTER;
+            thoughtDisplayBillboard = Display.Billboard.VERTICAL;
         }
         thoughtDisplayBackgroundColor = parseBackgroundColor(
                 npcConfig.getString("thought-display.background-color", "0,0,0,64"));
@@ -516,7 +516,7 @@ public class ConfigLoader {
         return thoughtDisplayFlashDurationTicks;
     }
 
-    /** TextDisplay 朝向模式（默认 CENTER）。 */
+    /** TextDisplay 朝向模式（默认 VERTICAL：仅水平旋转，垂直固定）。 */
     public Display.Billboard getThoughtDisplayBillboard() {
         return thoughtDisplayBillboard;
     }
@@ -554,5 +554,15 @@ public class ConfigLoader {
     /** 店名文字颜色（十六进制字符串）。 */
     public String getShopDisplayTextColor() {
         return shopDisplayTextColor;
+    }
+
+    /** 商店统计交易记录保留天数（默认 7，下限 1）。 */
+    public int getStatsRetentionDays() {
+        return Math.max(1, config.getInt("stats.retention-days", 7));
+    }
+
+    /** 商店统计面板单次查询记录上限（默认 100，下限 1）。 */
+    public int getStatsQueryLimit() {
+        return Math.max(1, config.getInt("stats.query-limit", 100));
     }
 }

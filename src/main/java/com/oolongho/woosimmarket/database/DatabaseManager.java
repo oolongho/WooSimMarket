@@ -38,7 +38,8 @@ public class DatabaseManager {
             int x, int y, int z,
             String facing,
             double balance,
-            long createdAt
+            long createdAt,
+            String name
     ) {
     }
 
@@ -62,6 +63,23 @@ public class DatabaseManager {
     ) {
     }
 
+    /**
+     * purchase_log 表的不可变数据载体（DAO 入参/出参）。
+     *
+     * <p>id 为自增主键，插入时由数据库生成（record 的 id 字段被忽略）；bought 表示 NPC 是否
+     * 成交；personality 存枚举名字符串；timestamp 为毫秒时间戳，用于按时间窗口清理与统计。</p>
+     */
+    public record PurchaseLogRecord(
+            long id,
+            String shopId,
+            String itemId,
+            double price,
+            boolean bought,
+            String personality,
+            long timestamp
+    ) {
+    }
+
     private static final String DRIVER_CLASS = "org.sqlite.JDBC";
     private static final String JDBC_PREFIX = "jdbc:sqlite:";
 
@@ -79,7 +97,8 @@ public class DatabaseManager {
                 z INTEGER NOT NULL,
                 facing TEXT NOT NULL,
                 balance REAL NOT NULL DEFAULT 0,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                name TEXT NOT NULL DEFAULT ''
             )""";
 
     private static final String SQL_CREATE_SHOPS_INDEX =
@@ -104,6 +123,21 @@ public class DatabaseManager {
 
     private static final String SQL_CREATE_SHELVES_INDEX =
             "CREATE INDEX IF NOT EXISTS idx_shelves_shop_id ON shelves(shop_id)";
+
+    private static final String SQL_CREATE_PURCHASE_LOG = """
+            CREATE TABLE IF NOT EXISTS purchase_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shop_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                price REAL NOT NULL,
+                bought INTEGER NOT NULL,
+                personality TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                FOREIGN KEY (shop_id) REFERENCES shops(id) ON DELETE CASCADE
+            )""";
+
+    private static final String SQL_CREATE_PURCHASE_LOG_INDEX =
+            "CREATE INDEX IF NOT EXISTS idx_purchase_log_shop_id ON purchase_log(shop_id, id DESC)";
 
     private final JavaPlugin plugin;
     private final String fileName;
@@ -155,6 +189,8 @@ public class DatabaseManager {
                 stmt.execute(SQL_CREATE_SHOPS_INDEX);
                 stmt.execute(SQL_CREATE_SHELVES);
                 stmt.execute(SQL_CREATE_SHELVES_INDEX);
+                stmt.execute(SQL_CREATE_PURCHASE_LOG);
+                stmt.execute(SQL_CREATE_PURCHASE_LOG_INDEX);
             }
         } finally {
             lock.unlock();

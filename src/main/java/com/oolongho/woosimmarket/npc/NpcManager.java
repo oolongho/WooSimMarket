@@ -217,7 +217,7 @@ public class NpcManager {
         if (roll < npc.deliberationProbability()) {
             // 命中：购买、flash BUY 文本、离开
             handlePurchase(npc, shelf, itemId);
-            marketManager.recordPurchaseOutcome(itemId, true);
+            marketManager.recordPurchaseOutcome(npc.shopId(), itemId, shelf.price(), true, npc.personality().name());
             thoughtDisplayManager.flash(npc, Phase.BUY);
             npc.startLeaving();
             return;
@@ -226,7 +226,7 @@ public class NpcManager {
         // 未命中：判定耗尽则 flash GIVE_UP 并离开，否则 roll 换架概率
         if (npc.deliberationRollsDone() >= npc.deliberationTotalRolls()) {
             thoughtDisplayManager.flash(npc, Phase.GIVE_UP);
-            marketManager.recordPurchaseOutcome(itemId, false);
+            marketManager.recordPurchaseOutcome(npc.shopId(), itemId, shelf.price(), false, npc.personality().name());
             npc.startLeaving();
         } else {
             // roll 换架概率：命中则切换到另一可售货架，未命中则切 HESITATE 等待下次 roll
@@ -577,6 +577,18 @@ public class NpcManager {
         int delaySec = ThreadLocalRandom.current().nextInt(minSec, maxSec + 1);
         long delayTicks = delaySec * 20L;
         spawnTask = TaskUtil.runLater(plugin, this::scheduleSpawn, delayTicks);
+    }
+
+    /**
+     * 重新调度生成任务（reload 调用）：取消当前 spawnTask，按最新 interval 立即重排。
+     *
+     * <p>不影响已存在的 NPC 与 tick 任务，仅让新的 spawn-interval 配置立即生效。</p>
+     */
+    public void rescheduleSpawn() {
+        if (spawnTask != null) {
+            spawnTask.cancel();
+        }
+        scheduleNextSpawn();
     }
 
     // ===== 辅助方法 =====

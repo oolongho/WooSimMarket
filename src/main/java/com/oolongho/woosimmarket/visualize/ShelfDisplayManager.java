@@ -114,9 +114,9 @@ public class ShelfDisplayManager {
         Location itemLoc = new Location(world,
                 shelf.x() + 0.5, shelf.y() + itemOffsetY, shelf.z() + 0.5);
 
-        // ItemDisplay：物品模型展示，billboard 视角跟随玩家（客户端原生处理，零卡顿）
+        // ItemDisplay：物品模型展示，billboard 仅水平旋转朝向玩家（客户端原生处理，零卡顿）
         ItemDisplay itemDisplay = world.spawn(itemLoc, ItemDisplay.class, entity -> {
-            entity.setBillboard(Display.Billboard.CENTER);
+            entity.setBillboard(Display.Billboard.VERTICAL);
             entity.setTransformation(new Transformation(
                     new Vector3f(),
                     new Quaternionf(),

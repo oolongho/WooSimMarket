@@ -14,8 +14,8 @@ import org.bukkit.inventory.ItemStack;
  */
 public class Shelf {
 
-    /** 默认最大库存（一组物品堆叠数）。 */
-    public static final int DEFAULT_MAX_STOCK = 64;
+    /** 默认最大库存（9 组物品堆叠数，对应货架 GUI 9 个商品槽）。 */
+    public static final int DEFAULT_MAX_STOCK = 576;
 
     private final String id;
     private final String shopId;

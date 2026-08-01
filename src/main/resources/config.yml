@@ -15,3 +15,10 @@ settings:
 database:
   # SQLite 数据库文件路径
   file: data/woosimmarket.db
+
+# 商店统计（purchase_log 保留与查询）
+stats:
+  # 交易记录保留天数（超过则清理，每日执行一次清理任务）
+  retention-days: 7
+  # 统计面板单次查询记录上限
+  query-limit: 100

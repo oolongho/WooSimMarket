@@ -3,13 +3,18 @@ package com.oolongho.woosimmarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.database.DatabaseManager;
+import com.oolongho.woosimmarket.database.PurchaseLogDao;
 import com.oolongho.woosimmarket.database.ShelfDao;
 import com.oolongho.woosimmarket.database.ShopDao;
 import com.oolongho.woosimmarket.economy.EconomyManager;
+import com.oolongho.woosimmarket.gui.PriceTableGui;
+import com.oolongho.woosimmarket.gui.PriceTableGuiListener;
 import com.oolongho.woosimmarket.gui.ShelfGui;
 import com.oolongho.woosimmarket.gui.ShelfGuiListener;
 import com.oolongho.woosimmarket.gui.ShopGui;
 import com.oolongho.woosimmarket.gui.ShopGuiListener;
+import com.oolongho.woosimmarket.gui.StatsGui;
+import com.oolongho.woosimmarket.gui.StatsGuiListener;
 import com.oolongho.woosimmarket.hook.CraftEngineHook;
 import com.oolongho.woosimmarket.hook.PlaceholderAPIHook;
 import com.oolongho.woosimmarket.hook.VaultHook;
@@ -25,6 +30,7 @@ import com.oolongho.woosimmarket.npc.NpcSkinCache;
 import com.oolongho.woosimmarket.npc.PersonalityManager;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.shop.ShopNamingManager;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
@@ -61,6 +67,7 @@ public class WooSimMarket extends JavaPlugin {
     private DatabaseManager databaseManager;
     private ShopDao shopDao;
     private ShelfDao shelfDao;
+    private PurchaseLogDao purchaseLogDao;
 
     // 钩子
     private CraftEngineHook craftEngineHook;
@@ -70,6 +77,7 @@ public class WooSimMarket extends JavaPlugin {
     // 业务管理器
     private ShopManager shopManager;
     private PricingManager pricingManager;
+    private ShopNamingManager shopNamingManager;
     private EconomyManager economyManager;
     private MarketManager marketManager;
     private NpcPacketSender npcPacketSender;
@@ -108,6 +116,7 @@ public class WooSimMarket extends JavaPlugin {
         // 4. DAO
         shopDao = new ShopDao(databaseManager);
         shelfDao = new ShelfDao(databaseManager);
+        purchaseLogDao = new PurchaseLogDao(databaseManager);
 
         // 5. CraftEngine 钩子（软依赖：未安装时降级为原版方块模式）
         craftEngineHook = new CraftEngineHook(this, configLoader);
@@ -132,11 +141,14 @@ public class WooSimMarket extends JavaPlugin {
         // 8. PricingManager
         pricingManager = new PricingManager(shopManager, messages);
 
+        // 8.5. ShopNamingManager（依赖 ShopManager + ShopDisplayManager）
+        shopNamingManager = new ShopNamingManager(shopManager, shopDisplayManager, messages);
+
         // 9. EconomyManager
         economyManager = new EconomyManager(vaultHook, shopManager);
 
         // 10. 物品价目表（加载 items.yml，NpcManager 购买判定依赖此）
-        marketManager = new MarketManager(this, configLoader);
+        marketManager = new MarketManager(this, configLoader, purchaseLogDao);
         marketManager.start();
 
         // 10.5. 购买判别式（纯计算，依赖 MarketManager + ConfigLoader）
@@ -199,10 +211,11 @@ public class WooSimMarket extends JavaPlugin {
         if (marketManager != null) {
             marketManager.stop();
         }
-        // 关闭所有打开的 GUI（ShelfGui 触发 onClose 持久化商品槽物品，ShopGui 无需持久化）
+        // 关闭所有打开的 GUI（ShelfGui 触发 onClose 持久化商品槽物品，ShopGui/StatsGui/PriceTableGui 无需持久化）
         for (var player : Bukkit.getOnlinePlayers()) {
             var holder = player.getOpenInventory().getTopInventory().getHolder();
-            if (holder instanceof ShelfGui || holder instanceof ShopGui) {
+            if (holder instanceof ShelfGui || holder instanceof ShopGui
+                    || holder instanceof StatsGui || holder instanceof PriceTableGui) {
                 player.closeInventory();
             }
         }
@@ -221,6 +234,10 @@ public class WooSimMarket extends JavaPlugin {
         if (personalityManager != null) {
             personalityManager.reload(configLoader.getNpcConfig());
         }
+        // 重新调度 NPC 生成任务，让新的 spawn-interval/spawn-factor 立即生效
+        if (npcManager != null) {
+            npcManager.rescheduleSpawn();
+        }
     }
 
     private void registerListeners() {
@@ -230,9 +247,13 @@ public class WooSimMarket extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(
                 new ShelfGuiListener(this, shopManager, pricingManager, messages, shelfDisplayManager), this);
         Bukkit.getPluginManager().registerEvents(
-                new ShopGuiListener(economyManager, messages), this);
+                new ShopGuiListener(economyManager, messages, this), this);
         Bukkit.getPluginManager().registerEvents(
-                new ChatListener(this, pricingManager), this);
+                new StatsGuiListener(this, economyManager, messages), this);
+        Bukkit.getPluginManager().registerEvents(
+                new PriceTableGuiListener(this, economyManager, messages), this);
+        Bukkit.getPluginManager().registerEvents(
+                new ChatListener(this, pricingManager, shopNamingManager), this);
         Bukkit.getPluginManager().registerEvents(
                 new PlayerListener(npcPacketSender), this);
         Bukkit.getPluginManager().registerEvents(
@@ -257,6 +278,13 @@ public class WooSimMarket extends JavaPlugin {
         return databaseManager;
     }
 
+    /**
+     * @return 购买日志 DAO（供 StatsGui / StatsCommand / ShopGuiListener 异步查询使用）
+     */
+    public PurchaseLogDao getPurchaseLogDao() {
+        return purchaseLogDao;
+    }
+
     public CraftEngineHook getCraftEngineHook() {
         return craftEngineHook;
     }
@@ -273,8 +301,16 @@ public class WooSimMarket extends JavaPlugin {
         return pricingManager;
     }
 
+    public ShopNamingManager getShopNamingManager() {
+        return shopNamingManager;
+    }
+
     public EconomyManager getEconomyManager() {
         return economyManager;
+    }
+
+    public MarketManager getMarketManager() {
+        return marketManager;
     }
 
     public NpcManager getNpcManager() {

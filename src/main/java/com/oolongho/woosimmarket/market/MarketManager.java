@@ -2,11 +2,16 @@ package com.oolongho.woosimmarket.market;
 
 import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
+import com.oolongho.woosimmarket.database.DatabaseManager;
+import com.oolongho.woosimmarket.database.PurchaseLogDao;
+import com.oolongho.woosimmarket.util.TaskUtil;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,7 +26,11 @@ import java.util.Map;
  * EMA ∈ [0,1]，初始 0.5（中性），购买 outcome=1.0，不买 outcome=0.0，α=0.3。
  * 不持久化，重启归零；事件驱动更新（无定时衰减任务）。</p>
  *
- * <p>线程模型：所有方法在主线程执行。</p>
+ * <p>职责三：将每次购买判定结果异步写入 {@code purchase_log} 表（供统计面板查询），
+ * 并按 {@code stats.retention-days}（默认 7 天）每日异步清理过期记录。</p>
+ *
+ * <p>线程模型：EMA 更新与配置查询在主线程执行；purchase_log 写入与清理通过
+ * {@link TaskUtil} 投递到异步线程，避免阻塞主线程。</p>
  *
  * @author oolongho
  */
@@ -32,6 +41,7 @@ public class MarketManager {
 
     private final WooSimMarket plugin;
     private final ConfigLoader configLoader;
+    private final PurchaseLogDao purchaseLogDao;
 
     /** 物品标准价表（itemId → ItemInfo）。 */
     private final Map<String, ItemInfo> itemInfos = new HashMap<>();
@@ -42,26 +52,35 @@ public class MarketManager {
     /** EMA 平滑系数（新结果贡献 30%，历史 70%）。 */
     private static final double EMA_ALPHA = 0.3;
 
+    /** 每日购买日志清理任务（异步），stop() 时取消。 */
+    private BukkitTask cleanupTask;
+
     /** 物品标准价信息。priceSensitivity 为 -1 时用全局默认。 */
     public record ItemInfo(String itemId, double standardPrice, double priceSensitivity) {}
 
-    public MarketManager(WooSimMarket plugin, ConfigLoader configLoader) {
+    public MarketManager(WooSimMarket plugin, ConfigLoader configLoader, PurchaseLogDao purchaseLogDao) {
         this.plugin = plugin;
         this.configLoader = configLoader;
+        this.purchaseLogDao = purchaseLogDao;
     }
 
     /**
-     * 启动市场系统：加载 items.yml。
+     * 启动市场系统：加载 items.yml 并调度每日购买日志清理任务。
      */
     public void start() {
         loadItems();
+        // 每日一次异步清理（24h = 24×60×60×20 ticks），初始延迟 0 立即执行首次清理
+        cleanupTask = TaskUtil.runAsyncAtFixed(plugin, this::cleanupPurchaseLog, 0L, 24L * 60 * 60 * 20);
     }
 
     /**
-     * 停止市场系统（桶滚动机制已移除，无任务需取消）。
+     * 停止市场系统：取消每日购买日志清理任务。
      */
     public void stop() {
-        // 桶滚动机制已移除，无任务需取消
+        if (cleanupTask != null) {
+            cleanupTask.cancel();
+            cleanupTask = null;
+        }
     }
 
     /**
@@ -95,6 +114,15 @@ public class MarketManager {
     }
 
     /**
+     * 获取物品标准价表的不可变视图（供 PriceTableGui 只读遍历）。
+     *
+     * @return itemId → ItemInfo 的不可变映射
+     */
+    public Map<String, ItemInfo> getItemInfos() {
+        return Collections.unmodifiableMap(itemInfos);
+    }
+
+    /**
      * 获取物品的购买动量（近期 NPC 购买结果 EMA）。
      *
      * <p>动量 ∈ [0,1]：1.0=近期 NPC 都买了（热销），0.0=都没买（冷门），
@@ -108,18 +136,38 @@ public class MarketManager {
     }
 
     /**
-     * 记录 NPC 购买判定结果，更新该物品的动量 EMA。
+     * 记录 NPC 购买判定结果，更新该物品的动量 EMA 并异步写入 purchase_log。
      *
-     * <p>EMA 更新：{@code ema = ema × (1 − α) + outcome × α}（α=0.3）。
-     * 购买 outcome=1.0，不买 outcome=0.0。主线程调用，无需同步。</p>
+     * <p>EMA 更新（主线程）：{@code ema = ema × (1 − α) + outcome × α}（α=0.3）。
+     * 购买 outcome=1.0，不买 outcome=0.0。purchase_log 写入通过
+     * {@link TaskUtil#runAsync} 投递到异步线程，避免阻塞主线程。
+     * id 字段传 0（DAO 忽略，由数据库自增）。</p>
      *
-     * @param itemId 物品 ID
-     * @param bought true=NPC 购买，false=未购买（判定耗尽）
+     * @param shopId      商店 id
+     * @param itemId      物品 ID
+     * @param price       成交价（判定时的货架价格）
+     * @param bought      true=NPC 购买，false=未购买（判定耗尽）
+     * @param personality NPC 性格枚举名
      */
-    public void recordPurchaseOutcome(String itemId, boolean bought) {
+    public void recordPurchaseOutcome(String shopId, String itemId, double price, boolean bought, String personality) {
         double outcome = bought ? 1.0 : 0.0;
         double current = purchaseEma.getOrDefault(itemId, 0.5);
         purchaseEma.put(itemId, current * (1.0 - EMA_ALPHA) + outcome * EMA_ALPHA);
+
+        TaskUtil.runAsync(plugin, () -> purchaseLogDao.insert(
+                new DatabaseManager.PurchaseLogRecord(0, shopId, itemId, price, bought, personality, System.currentTimeMillis())));
+    }
+
+    /**
+     * 清理过期购买日志（每日异步执行）。
+     *
+     * <p>删除时间戳早于 {@code now - retentionDays × 86400000ms} 的记录，
+     * retentionDays 来自 {@link ConfigLoader#getStatsRetentionDays()}（默认 7，下限 1）。
+     * 在方法内读取配置而非字段缓存，便于 reload 后立即生效。</p>
+     */
+    private void cleanupPurchaseLog() {
+        long retentionDays = configLoader.getStatsRetentionDays();
+        purchaseLogDao.deleteOlderThan(System.currentTimeMillis() - retentionDays * 86400000L);
     }
 
     /**

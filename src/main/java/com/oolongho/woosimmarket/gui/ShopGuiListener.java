@@ -1,8 +1,10 @@
 package com.oolongho.woosimmarket.gui;
 
+import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
 import com.oolongho.woosimmarket.model.Shop;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -17,8 +19,10 @@ import org.bukkit.event.inventory.InventoryDragEvent;
  * 处理两类事件：</p>
  * <ul>
  *   <li>{@link InventoryClickEvent}：所有槽位均取消点击（纯信息面板，不允许放入/取出物品）；
+ *       信息按钮 → 调度下一 tick 关闭 GUI 并进入改名态（{@link com.oolongho.woosimmarket.shop.ShopNamingManager}）；
  *       提现按钮 → 调用 {@link EconomyManager#withdrawShopBalance} 提现余额到玩家账户，
- *       根据结果发送消息并刷新 GUI 显示新余额；刷新按钮 → 重新读取余额并刷新信息按钮。</li>
+ *       根据结果发送消息并刷新 GUI 显示新余额；标准价表按钮 → 打开 {@link PriceTableGui}；
+ *       统计按钮 → 打开 {@link StatsGui} 交易统计面板（构造时内部异步查询）。</li>
  *   <li>{@link InventoryDragEvent}：涉及任何槽位时取消（防止物品拖入覆盖边框/按钮）。</li>
  * </ul>
  *
@@ -28,14 +32,16 @@ public class ShopGuiListener implements Listener {
 
     private final EconomyManager economyManager;
     private final Messages messages;
+    private final WooSimMarket plugin;
 
-    public ShopGuiListener(EconomyManager economyManager, Messages messages) {
+    public ShopGuiListener(EconomyManager economyManager, Messages messages, WooSimMarket plugin) {
         this.economyManager = economyManager;
         this.messages = messages;
+        this.plugin = plugin;
     }
 
     /**
-     * 点击事件：所有槽位取消点击，提现/刷新按钮处理对应逻辑。
+     * 点击事件：所有槽位取消点击，信息/提现/标准价表/统计按钮处理对应逻辑。
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onClick(InventoryClickEvent event) {
@@ -63,10 +69,14 @@ public class ShopGuiListener implements Listener {
             return;
         }
 
-        if (raw == ShopGui.SLOT_WITHDRAW) {
+        if (raw == ShopGui.SLOT_INFO) {
+            handleInfoClick(gui, player);
+        } else if (raw == ShopGui.SLOT_WITHDRAW) {
             handleWithdrawClick(gui, player);
-        } else if (raw == ShopGui.SLOT_REFRESH) {
-            handleRefreshClick(gui);
+        } else if (raw == ShopGui.SLOT_PRICE_TABLE) {
+            handlePriceTableClick(gui, player);
+        } else if (raw == ShopGui.SLOT_STATS) {
+            handleStatsClick(gui, player);
         }
     }
 
@@ -89,10 +99,21 @@ public class ShopGuiListener implements Listener {
     // ===== 内部处理 =====
 
     /**
+     * 信息按钮：调度到下一 tick 关闭 GUI 并进入改名态（避免在事件处理中触发 InventoryCloseEvent 嵌套）。
+     */
+    private void handleInfoClick(ShopGui gui, Player player) {
+        Shop shop = gui.getShop();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            player.closeInventory();
+            plugin.getShopNamingManager().startNaming(player, shop);
+        });
+    }
+
+    /**
      * 提现按钮：调用 EconomyManager 提现商店余额到玩家账户。
      *
      * <p>Vault 不可用或余额为 0 时提示失败/无可提现；
-     * 提现成功后刷新 GUI 信息按钮显示新余额（已清零）。</p>
+     * 提现成功后刷新 GUI 提现按钮显示新余额（已清零）。</p>
      */
     private void handleWithdrawClick(ShopGui gui, Player player) {
         Shop shop = gui.getShop();
@@ -120,9 +141,19 @@ public class ShopGuiListener implements Listener {
     }
 
     /**
-     * 刷新按钮：重新读取余额并刷新信息按钮显示。
+     * 统计按钮：打开交易统计面板。
+     *
+     * <p>{@link StatsGui} 构造时内部已异步查询 purchase_log 并主线程渲染，
+     * 此处直接在主线程构造并打开即可，无需额外异步包装。</p>
      */
-    private void handleRefreshClick(ShopGui gui) {
-        gui.refresh(messages);
+    private void handleStatsClick(ShopGui gui, Player player) {
+        new StatsGui(gui.getShop(), plugin.getPurchaseLogDao(), messages, plugin).open(player);
+    }
+
+    /**
+     * 标准价表按钮：打开标准价表面板。
+     */
+    private void handlePriceTableClick(ShopGui gui, Player player) {
+        new PriceTableGui(gui.getShop(), economyManager, plugin.getMarketManager(), messages).open(player);
     }
 }

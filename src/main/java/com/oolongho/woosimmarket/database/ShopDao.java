@@ -22,26 +22,26 @@ import java.util.UUID;
 public class ShopDao {
 
     private static final String SQL_INSERT = """
-            INSERT INTO shops (id, owner_uuid, world, x, y, z, facing, balance, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+            INSERT INTO shops (id, owner_uuid, world, x, y, z, facing, balance, created_at, name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
     private static final String SQL_UPDATE = """
             UPDATE shops
-            SET owner_uuid=?, world=?, x=?, y=?, z=?, facing=?, balance=?, created_at=?
+            SET owner_uuid=?, world=?, x=?, y=?, z=?, facing=?, balance=?, created_at=?, name=?
             WHERE id=?""";
 
     private static final String SQL_DELETE = "DELETE FROM shops WHERE id=?";
 
     private static final String SQL_FIND_BY_ID = """
-            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at
+            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name
             FROM shops WHERE id=?""";
 
     private static final String SQL_FIND_BY_OWNER = """
-            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at
+            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name
             FROM shops WHERE owner_uuid=?""";
 
     private static final String SQL_LOAD_ALL = """
-            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at
+            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name
             FROM shops""";
 
     private final DatabaseManager db;
@@ -189,6 +189,7 @@ public class ShopDao {
         ps.setString(7, r.facing());
         ps.setDouble(8, r.balance());
         ps.setLong(9, r.createdAt());
+        ps.setString(10, r.name());
     }
 
     private static void bindUpdate(PreparedStatement ps, ShopRecord r) throws SQLException {
@@ -200,7 +201,8 @@ public class ShopDao {
         ps.setString(6, r.facing());
         ps.setDouble(7, r.balance());
         ps.setLong(8, r.createdAt());
-        ps.setString(9, r.id());
+        ps.setString(9, r.name());
+        ps.setString(10, r.id());
     }
 
     private static ShopRecord map(ResultSet rs) throws SQLException {
@@ -213,7 +215,8 @@ public class ShopDao {
                 rs.getInt("z"),
                 rs.getString("facing"),
                 rs.getDouble("balance"),
-                rs.getLong("created_at")
+                rs.getLong("created_at"),
+                rs.getString("name")
         );
     }
 

@@ -157,8 +157,9 @@ public class BlockListener implements Listener {
         // 获取朝向
         String facing = getFacing(block);
 
-        // 创建商店
-        Shop shop = shopManager.createShop(player.getUniqueId(), world, x, y, z, facing);
+        // 创建商店（默认店名取 ownerName + " 的小店"，玩家可在商店面板点击改名）
+        String defaultName = messages.getRaw("shop-default-name").replace("{owner}", player.getName());
+        Shop shop = shopManager.createShop(player.getUniqueId(), world, x, y, z, facing, defaultName);
         if (shop == null) {
             event.setCancelled(true);
             plugin.getLogger().severe(() -> "创建商店落库失败：玩家=" + player.getName() + " 位置=" + world + "," + x + "," + y + "," + z);
@@ -236,7 +237,12 @@ public class BlockListener implements Listener {
             return;
         }
 
-        new ShopGui(shop, plugin.getEconomyManager(), plugin.getShopManager(), messages).open(player);
+        // 改名态中不打开 GUI
+        if (plugin.getShopNamingManager().isNaming(player)) {
+            return;
+        }
+
+        new ShopGui(shop, plugin.getEconomyManager(), messages).open(player);
     }
 
     /**

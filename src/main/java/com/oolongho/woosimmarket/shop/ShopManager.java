@@ -124,17 +124,29 @@ public class ShopManager {
      * @param y         方块 y
      * @param z         方块 z
      * @param facing    朝向枚举名
+     * @param name      店名
      * @return 创建的 Shop；落库失败返回 null
      */
-    public Shop createShop(UUID ownerUuid, String world, int x, int y, int z, String facing) {
+    public Shop createShop(UUID ownerUuid, String world, int x, int y, int z, String facing, String name) {
         String id = UUID.randomUUID().toString();
         long createdAt = System.currentTimeMillis();
-        Shop shop = new Shop(id, ownerUuid, world, x, y, z, facing, 0, createdAt);
+        Shop shop = new Shop(id, ownerUuid, world, x, y, z, facing, 0, createdAt, name);
         if (!shopDao.insert(shop.toRecord())) {
             return null;
         }
         registerShop(shop);
         return shop;
+    }
+
+    /**
+     * 重命名商店：更新 name 字段并落库。
+     *
+     * @param shop 商店
+     * @param name 新店名
+     */
+    public void renameShop(Shop shop, String name) {
+        shop.name(name);
+        shopDao.update(shop.toRecord());
     }
 
     /**
