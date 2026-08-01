@@ -15,8 +15,8 @@ npc:
   despawn-distance: 32
   # NPC 到达货架的判定距离
   target-reach-distance: 1
-  # NPC 移动速度（格/tick，0.15 = 约3格/秒）
-  speed: 0.15
+  # NPC 移动速度（格/tick，0.12 = 约2.4格/秒）
+  speed: 0.12
   # A*寻路最大搜索距离
   pathfinding-max-distance: 32
   # A*寻路最大迭代节点数（防止过度计算）
@@ -69,13 +69,15 @@ npc:
     max-rolls: 3
     # 换架概率（每次判定未命中后 roll，0=永不换架，1=必换架）
     # NPC 判定未命中时有概率切换到商店内另一个货架继续查看，模拟"逛店"行为
-    shelf-switch-probability: 0.3
+    shelf-switch-probability: 0.5
     # 换架超时秒数（超时后直接传送至目标货架，模拟"穿墙"兜底）
     switch-timeout-seconds: 3
     # impatience=1（急躁）时的判定间隔（ticks）
-    interval-min-ticks: 20
+    interval-min-ticks: 40
     # impatience=0（耐心）时的判定间隔（ticks）
-    interval-max-ticks: 60
+    interval-max-ticks: 160
+    # 判定结束后原地停留 ticks
+    linger-ticks: 40
 
 skin:
   # NPC 皮肤列表

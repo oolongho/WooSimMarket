@@ -17,6 +17,11 @@ shop-rename-prompt: "{prefix}<color:#F59E0B>Please type a new shop name in chat 
 shop-rename-cancelled: "{prefix}<color:#9CA3AF>Rename cancelled.</color>"
 shop-rename-success: "{prefix}<color:#10B981>Shop name updated to {name}.</color>"
 shop-rename-invalid: "{prefix}<color:#EF4444>Invalid name (length must be 1-20).</color>"
+shop-notify-on: "{prefix}<color:#10B981>Purchase notifications enabled.</color>"
+shop-notify-off: "{prefix}<color:#9CA3AF>Purchase notifications disabled.</color>"
+shop-shelf-all-enabled: "{prefix}<color:#10B981>All shelves enabled.</color>"
+shop-shelf-all-disabled: "{prefix}<color:#EF4444>All shelves disabled.</color>"
+shop-shelf-empty: "{prefix}<color:#F59E0B>Shop has no shelves.</color>"
 
 # Shelf
 shelf-bound: "{prefix}<color:#10B981>Shelf bound to shop. Please open the shelf management UI to enable it.</color>"
@@ -73,6 +78,13 @@ gui-shop-withdraw: "<color:#10B981>Click to withdraw</color>"
 gui-shop-price-table: "<color:#5EEAD4>Price Table</color>"
 gui-shop-price-table-lore: "<gray>Click to view standard price table</gray>"
 gui-shop-balance: "<color:#F59E0B>Current balance: {balance}</color>"
+gui-shop-notify-on: "<color:#10B981>Purchase notifications: ON</color>"
+gui-shop-notify-off: "<color:#EF4444>Purchase notifications: OFF</color>"
+gui-shop-notify-lore: "<gray>Click to toggle</gray>"
+gui-shop-shelf-toggle: "<color:#5EEAD4>Toggle All Shelves</color>"
+gui-shop-shelf-enable-all: "<color:#10B981>Enable All</color>"
+gui-shop-shelf-disable-all: "<color:#EF4444>Disable All</color>"
+gui-shop-shelf-toggle-lore: "<gray>Click to toggle all shelves</gray>"
 
 # Shop statistics panel
 gui-stats-title: "Shop Statistics"

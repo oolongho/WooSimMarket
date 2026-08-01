@@ -165,7 +165,7 @@ public class ThoughtDisplayManager {
      *
      * <p>仅在 {@code handleRoll} hit（BUY）/ 耗尽（GIVE_UP）时调用。流程：
      * 取 handle → 校验 isValid → 设 text → cancel 旧 flashTask → 调度新 flashTask。
-     * flash 期间 TextDisplay 原地不动，NPC 同时 startLeaving 开始走开。</p>
+     * flash 期间 TextDisplay 原地不动，NPC 进入 LINGER 状态原地停留展示结果文本，停留结束后才转身离开。</p>
      *
      * @param npc   NPC
      * @param phase 结果阶段（BUY 或 GIVE_UP）

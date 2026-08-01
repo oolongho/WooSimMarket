@@ -53,6 +53,7 @@ public class ConfigLoader {
     private int npcDeliberationMaxRolls;
     private int npcDeliberationIntervalMinTicks;
     private int npcDeliberationIntervalMaxTicks;
+    private int npcDeliberationLingerTicks;
     /** 生成系数：NPC 数 = min(max-concurrent, 启用货架数 × spawn-factor)。 */
     private double npcSpawnFactor;
     /** 换架概率（每次判定未命中后 roll）。 */
@@ -183,6 +184,7 @@ public class ConfigLoader {
         // 保证 max >= min，避免区间退化
         npcDeliberationIntervalMaxTicks = Math.max(npcDeliberationIntervalMinTicks,
                 npcConfig.getInt("npc.deliberation.interval-max-ticks", 60));
+        npcDeliberationLingerTicks = Math.max(0, npcConfig.getInt("npc.deliberation.linger-ticks", 60));
 
         // npc.spawn / npc.deliberation（换架行为，子系统 1.5）
         npcSpawnFactor = Math.max(0.1, npcConfig.getDouble("npc.spawn-factor", 1.0));
@@ -399,6 +401,11 @@ public class ConfigLoader {
     /** NPC 徘徊判定间隔上限（impatience=0 时，ticks）。 */
     public int getNpcDeliberationIntervalMaxTicks() {
         return npcDeliberationIntervalMaxTicks;
+    }
+
+    /** NPC 判定结束后原地停留 ticks（成交/放弃后不立即离开的过渡时长）。 */
+    public int getNpcDeliberationLingerTicks() {
+        return npcDeliberationLingerTicks;
     }
 
     /** 生成系数：NPC 数 = min(max-concurrent, 启用货架数 × spawn-factor)。 */

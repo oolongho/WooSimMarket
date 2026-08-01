@@ -22,26 +22,26 @@ import java.util.UUID;
 public class ShopDao {
 
     private static final String SQL_INSERT = """
-            INSERT INTO shops (id, owner_uuid, world, x, y, z, facing, balance, created_at, name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+            INSERT INTO shops (id, owner_uuid, world, x, y, z, facing, balance, created_at, name, notify_enabled)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
     private static final String SQL_UPDATE = """
             UPDATE shops
-            SET owner_uuid=?, world=?, x=?, y=?, z=?, facing=?, balance=?, created_at=?, name=?
+            SET owner_uuid=?, world=?, x=?, y=?, z=?, facing=?, balance=?, created_at=?, name=?, notify_enabled=?
             WHERE id=?""";
 
     private static final String SQL_DELETE = "DELETE FROM shops WHERE id=?";
 
     private static final String SQL_FIND_BY_ID = """
-            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name
+            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name, notify_enabled
             FROM shops WHERE id=?""";
 
     private static final String SQL_FIND_BY_OWNER = """
-            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name
+            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name, notify_enabled
             FROM shops WHERE owner_uuid=?""";
 
     private static final String SQL_LOAD_ALL = """
-            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name
+            SELECT id, owner_uuid, world, x, y, z, facing, balance, created_at, name, notify_enabled
             FROM shops""";
 
     private final DatabaseManager db;
@@ -190,6 +190,7 @@ public class ShopDao {
         ps.setDouble(8, r.balance());
         ps.setLong(9, r.createdAt());
         ps.setString(10, r.name());
+        ps.setBoolean(11, r.notifyEnabled());
     }
 
     private static void bindUpdate(PreparedStatement ps, ShopRecord r) throws SQLException {
@@ -202,7 +203,8 @@ public class ShopDao {
         ps.setDouble(7, r.balance());
         ps.setLong(8, r.createdAt());
         ps.setString(9, r.name());
-        ps.setString(10, r.id());
+        ps.setBoolean(10, r.notifyEnabled());
+        ps.setString(11, r.id());
     }
 
     private static ShopRecord map(ResultSet rs) throws SQLException {
@@ -216,7 +218,8 @@ public class ShopDao {
                 rs.getString("facing"),
                 rs.getDouble("balance"),
                 rs.getLong("created_at"),
-                rs.getString("name")
+                rs.getString("name"),
+                rs.getBoolean("notify_enabled")
         );
     }
 

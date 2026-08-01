@@ -24,8 +24,9 @@ import java.util.Map;
  *
  * <p>布局（9×6）：
  * <ul>
- *   <li>第一行导航：slot 0 返回 / slot 3 上一页 / slot 4 页码 / slot 5 下一页</li>
- *   <li>slot 9-53（45 格）：物品列表分页，每项显示 itemId、标准价与价格敏感度</li>
+ *   <li>slot 0：返回按钮（BOOK，回到商店面板）</li>
+ *   <li>slot 10-16 / 19-25 / 28-34 / 37-43（28 格）：物品列表分页</li>
+ *   <li>slot 45 上一页 / slot 49 页码 / slot 53 下一页</li>
  *   <li>其余槽位：LIME_STAINED_GLASS_PANE 边框</li>
  * </ul></p>
  *
@@ -40,11 +41,17 @@ public class PriceTableGui implements InventoryHolder {
 
     public static final int SIZE = 54;
     public static final int SLOT_BACK = 0;
-    public static final int SLOT_PREV = 3;
-    public static final int SLOT_PAGE = 4;
-    public static final int SLOT_NEXT = 5;
-    public static final int FIRST_ITEM_SLOT = 9;
-    public static final int ITEMS_PER_PAGE = 45;
+    public static final int SLOT_PREV = 45;
+    public static final int SLOT_PAGE = 49;
+    public static final int SLOT_NEXT = 53;
+    public static final int ITEMS_PER_PAGE = 28;
+    /** 物品槽位列表（rows 2-5 各 7 格，跳过首尾边框列）。 */
+    private static final int[] ITEM_SLOTS = {
+            10, 11, 12, 13, 14, 15, 16,
+            19, 20, 21, 22, 23, 24, 25,
+            28, 29, 30, 31, 32, 33, 34,
+            37, 38, 39, 40, 41, 42, 43
+    };
 
     private final Shop shop;
     private final EconomyManager economyManager;
@@ -108,7 +115,7 @@ public class PriceTableGui implements InventoryHolder {
             inventory.setItem(i, border);
         }
 
-        inventory.setItem(SLOT_BACK, createNavButton(Material.ARROW,
+        inventory.setItem(SLOT_BACK, createNavButton(Material.BOOK,
                 "gui-price-table-back", "gui-price-table-back-lore"));
         inventory.setItem(SLOT_PREV, createNavButton(Material.ARROW, "gui-price-table-prev", null));
         inventory.setItem(SLOT_PAGE, createPageIndicator());
@@ -118,7 +125,7 @@ public class PriceTableGui implements InventoryHolder {
         int end = Math.min(start + ITEMS_PER_PAGE, entries.size());
         for (int i = start; i < end; i++) {
             Map.Entry<String, ItemInfo> e = entries.get(i);
-            inventory.setItem(FIRST_ITEM_SLOT + (i - start), createItemEntry(e.getKey(), e.getValue()));
+            inventory.setItem(ITEM_SLOTS[i - start], createItemEntry(e.getKey(), e.getValue()));
         }
     }
 

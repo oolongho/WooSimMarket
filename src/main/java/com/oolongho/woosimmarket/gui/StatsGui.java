@@ -26,9 +26,9 @@ import java.util.Map;
  * <p>布局（9×6）：
  * <ul>
  *   <li>slot 0：返回按钮（ARROW，回到商店面板）</li>
- *   <li>slot 10/12/14/16/19/21/23：总览卡片（PAPER/EMERALD/REDSTONE/REPEATER/
- *       GOLD_INGOT/DIAMOND/BOOK，对应总判定/成交/拒绝/购买率/总收入/平均成交价/统计窗口）</li>
- *   <li>slot 28/30/32/34/37/39/41：物品明细（前 7 个 ItemStat，图标用
+ *   <li>slot 10-16：总览卡片 7 张（PAPER/GOLD_INGOT/EMERALD/REDSTONE/REPEATER/
+ *       DIAMOND/BOOK，对应总判定/总收入/成交/拒绝/购买率/平均成交价/统计窗口）</li>
+ *   <li>slot 28-43：物品明细（前 16 个 ItemStat，图标用
  *       {@link Material#matchMaterial}，失败兜底 PAPER）</li>
  *   <li>slot 49：刷新按钮（CLOCK，重新异步查询并刷新）</li>
  *   <li>slot 22：无记录时的空状态指示（PAPER）</li>
@@ -52,16 +52,20 @@ public class StatsGui implements InventoryHolder {
     /** 刷新按钮槽位（Listener 据此触发 refresh）。 */
     public static final int SLOT_REFRESH = 49;
 
-    /** 无记录时的空状态指示槽位（位于上中区域，常态为边框）。 */
+    /** 无记录时的空状态指示槽位（位于分隔行中央，常态为边框）。 */
     private static final int SLOT_EMPTY = 22;
-    /** 总览卡片槽位（顺序对应 PAPER/EMERALD/REDSTONE/REPEATER/GOLD_INGOT/DIAMOND/BOOK）。 */
-    private static final int[] OVERVIEW_SLOTS = {10, 12, 14, 16, 19, 21, 23};
-    /** 物品明细槽位（最多 7 个，不足留空）。 */
-    private static final int[] ITEM_SLOTS = {28, 30, 32, 34, 37, 39, 41};
+    /** 总览卡片槽位（顺序对应 PAPER/GOLD_INGOT/EMERALD/REDSTONE/REPEATER/DIAMOND/BOOK）。 */
+    private static final int[] OVERVIEW_SLOTS = {10, 11, 12, 13, 14, 15, 16};
+    /** 物品明细槽位（最多 16 个，不足留空）。 */
+    private static final int[] ITEM_SLOTS = {
+            28, 29, 30, 31, 32, 33, 34, 35,
+            36, 37, 38, 39, 40, 41, 42, 43
+    };
     /** 所有内容槽位（含空状态槽），刷新时先重置为边框再填充。 */
     private static final int[] CONTENT_SLOTS = {
-            10, 12, 14, 16, 19, 21, 23, SLOT_EMPTY,
-            28, 30, 32, 34, 37, 39, 41
+            10, 11, 12, 13, 14, 15, 16, SLOT_EMPTY,
+            28, 29, 30, 31, 32, 33, 34, 35,
+            36, 37, 38, 39, 40, 41, 42, 43
     };
 
     private final Shop shop;
@@ -167,7 +171,7 @@ public class StatsGui implements InventoryHolder {
     /**
      * 将购买日志聚合为商店统计快照。
      *
-     * <p>perItem 按 attempts 降序、itemId 升序（保证并列时取前 7 的确定性）取前 7。</p>
+     * <p>perItem 按 attempts 降序、itemId 升序（保证并列时取前 16 的确定性）取前 16。</p>
      *
      * @param records 近期购买日志
      * @return 聚合结果
@@ -204,7 +208,7 @@ public class StatsGui implements InventoryHolder {
                 .map(ItemAccum::toStat)
                 .sorted(Comparator.comparingInt(ItemStat::attempts).reversed()
                         .thenComparing(ItemStat::itemId))
-                .limit(7)
+                .limit(16)
                 .toList();
 
         return new ShopStats(totalAttempts, boughtCount, rejectedCount, purchaseRate,
@@ -212,25 +216,25 @@ public class StatsGui implements InventoryHolder {
     }
 
     /**
-     * 渲染 7 张总览卡片（总判定/成交/拒绝/购买率/总收入/平均成交价/统计窗口）。
+     * 渲染 7 张总览卡片（总判定/总收入/成交/拒绝/购买率/平均成交价/统计窗口）。
      */
     private void renderOverviewCards(ShopStats stats) {
         int queryLimit = plugin.getConfigLoader().getStatsQueryLimit();
         inventory.setItem(OVERVIEW_SLOTS[0], createCard(Material.PAPER,
                 "gui-stats-total-attempts", "gui-stats-total-attempts-lore",
                 "value", String.valueOf(stats.totalAttempts())));
-        inventory.setItem(OVERVIEW_SLOTS[1], createCard(Material.EMERALD,
-                "gui-stats-bought", "gui-stats-bought-lore",
-                "value", String.valueOf(stats.boughtCount())));
-        inventory.setItem(OVERVIEW_SLOTS[2], createCard(Material.REDSTONE,
-                "gui-stats-rejected", "gui-stats-rejected-lore",
-                "value", String.valueOf(stats.rejectedCount())));
-        inventory.setItem(OVERVIEW_SLOTS[3], createCard(Material.REPEATER,
-                "gui-stats-rate", "gui-stats-rate-lore",
-                "value", String.format("%.1f", stats.purchaseRate())));
-        inventory.setItem(OVERVIEW_SLOTS[4], createCard(Material.GOLD_INGOT,
+        inventory.setItem(OVERVIEW_SLOTS[1], createCard(Material.GOLD_INGOT,
                 "gui-stats-revenue", "gui-stats-revenue-lore",
                 "value", plugin.getEconomyManager().format(stats.totalRevenue())));
+        inventory.setItem(OVERVIEW_SLOTS[2], createCard(Material.EMERALD,
+                "gui-stats-bought", "gui-stats-bought-lore",
+                "value", String.valueOf(stats.boughtCount())));
+        inventory.setItem(OVERVIEW_SLOTS[3], createCard(Material.REDSTONE,
+                "gui-stats-rejected", "gui-stats-rejected-lore",
+                "value", String.valueOf(stats.rejectedCount())));
+        inventory.setItem(OVERVIEW_SLOTS[4], createCard(Material.REPEATER,
+                "gui-stats-rate", "gui-stats-rate-lore",
+                "value", String.format("%.1f", stats.purchaseRate())));
         inventory.setItem(OVERVIEW_SLOTS[5], createCard(Material.DIAMOND,
                 "gui-stats-avg-price", "gui-stats-avg-price-lore",
                 "value", plugin.getEconomyManager().format(stats.avgBoughtPrice())));
@@ -240,7 +244,7 @@ public class StatsGui implements InventoryHolder {
     }
 
     /**
-     * 渲染物品明细（前 7 个 ItemStat，不足 7 个时剩余槽位保持边框）。
+     * 渲染物品明细（前 16 个 ItemStat，不足 16 个时剩余槽位保持边框）。
      */
     private void renderItemDetails(ShopStats stats) {
         List<ItemStat> items = stats.perItem();
@@ -338,7 +342,7 @@ public class StatsGui implements InventoryHolder {
      * @param purchaseRate   购买率（0-100，totalAttempts=0 时为 0.0）
      * @param totalRevenue   总收入（成交记录的 price 之和）
      * @param avgBoughtPrice 平均成交价（totalRevenue / boughtCount，boughtCount=0 时为 0.0）
-     * @param perItem        按判定次数降序的前 7 个物品统计
+     * @param perItem        按判定次数降序的前 16 个物品统计
      */
     public record ShopStats(
             int totalAttempts,

@@ -117,6 +117,7 @@ public class ShopManager {
 
     /**
      * 创建商店。调用方应先校验上限（{@link #countShopsByOwner}）和距离（{@link #isShopNear}）。
+     * notifyEnabled 默认为 true（NPC 购买时向店主广播提示）。
      *
      * @param ownerUuid 拥有者 UUID
      * @param world     世界名
@@ -130,7 +131,7 @@ public class ShopManager {
     public Shop createShop(UUID ownerUuid, String world, int x, int y, int z, String facing, String name) {
         String id = UUID.randomUUID().toString();
         long createdAt = System.currentTimeMillis();
-        Shop shop = new Shop(id, ownerUuid, world, x, y, z, facing, 0, createdAt, name);
+        Shop shop = new Shop(id, ownerUuid, world, x, y, z, facing, 0, createdAt, name, true);
         if (!shopDao.insert(shop.toRecord())) {
             return null;
         }
@@ -147,6 +148,49 @@ public class ShopManager {
     public void renameShop(Shop shop, String name) {
         shop.name(name);
         shopDao.update(shop.toRecord());
+    }
+
+    /**
+     * 切换商店的 NPC 购买提示开关并落库。
+     *
+     * @param shop        商店
+     * @param notifyEnabled 是否启用购买提示
+     */
+    public void setNotifyEnabled(Shop shop, boolean notifyEnabled) {
+        shop.notifyEnabled(notifyEnabled);
+        shopDao.update(shop.toRecord());
+    }
+
+    /**
+     * 一键切换商店所有货架的启用状态。
+     *
+     * <p>策略：若存在任一禁用货架 → 全部启用；否则全部禁用。
+     * 返回最终目标状态（true=已全部启用，false=已全部禁用）。
+     * 商店无货架时返回 null（无操作）。</p>
+     *
+     * @param shop 商店
+     * @return 切换后的目标状态；商店无货架返回 null
+     */
+    public Boolean toggleAllShelves(Shop shop) {
+        List<Shelf> shelves = getShelvesByShop(shop.id());
+        if (shelves.isEmpty()) {
+            return null;
+        }
+        boolean anyDisabled = false;
+        for (Shelf s : shelves) {
+            if (!s.enabled()) {
+                anyDisabled = true;
+                break;
+            }
+        }
+        boolean target = anyDisabled; // 有禁用则目标=启用，全启用则目标=禁用
+        for (Shelf s : shelves) {
+            if (s.enabled() != target) {
+                s.enabled(target);
+                shelfDao.update(s.toRecord());
+            }
+        }
+        return target;
     }
 
     /**

@@ -242,7 +242,7 @@ public class BlockListener implements Listener {
             return;
         }
 
-        new ShopGui(shop, plugin.getEconomyManager(), messages).open(player);
+        new ShopGui(shop, plugin.getEconomyManager(), messages, shopManager).open(player);
     }
 
     /**

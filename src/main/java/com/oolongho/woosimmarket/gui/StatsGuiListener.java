@@ -103,7 +103,7 @@ public class StatsGuiListener implements Listener {
         Shop shop = gui.getShop();
         Bukkit.getScheduler().runTask(plugin, () -> {
             player.closeInventory();
-            new ShopGui(shop, economyManager, messages).open(player);
+            new ShopGui(shop, economyManager, messages, plugin.getShopManager()).open(player);
         });
     }
 }

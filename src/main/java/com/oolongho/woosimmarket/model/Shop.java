@@ -7,7 +7,7 @@ import java.util.UUID;
 /**
  * 商店领域模型（可变）。
  *
- * <p>{@code balance} 与 {@code name} 可变，其余字段不可变。与 {@link ShopRecord} 双向转换：
+ * <p>{@code balance}、{@code name}、{@code notifyEnabled} 可变，其余字段不可变。与 {@link ShopRecord} 双向转换：
  * {@link #fromRecord(ShopRecord)} 构造实例，{@link #toRecord()} 序列化为 DAO 入参。</p>
  *
  * <p>位置以 world + x + y + z 整数方块坐标存储，facing 存枚举名字符串（NORTH/SOUTH/EAST/WEST）。</p>
@@ -26,9 +26,10 @@ public class Shop {
     private double balance;
     private final long createdAt;
     private String name;
+    private boolean notifyEnabled;
 
     public Shop(String id, UUID ownerUuid, String world, int x, int y, int z,
-                String facing, double balance, long createdAt, String name) {
+                String facing, double balance, long createdAt, String name, boolean notifyEnabled) {
         this.id = id;
         this.ownerUuid = ownerUuid;
         this.world = world;
@@ -39,6 +40,7 @@ public class Shop {
         this.balance = balance;
         this.createdAt = createdAt;
         this.name = name;
+        this.notifyEnabled = notifyEnabled;
     }
 
     /**
@@ -58,7 +60,8 @@ public class Shop {
                 record.facing(),
                 record.balance(),
                 record.createdAt(),
-                record.name()
+                record.name(),
+                record.notifyEnabled()
         );
     }
 
@@ -68,7 +71,7 @@ public class Shop {
      * @return ShopRecord 实例
      */
     public ShopRecord toRecord() {
-        return new ShopRecord(id, ownerUuid, world, x, y, z, facing, balance, createdAt, name);
+        return new ShopRecord(id, ownerUuid, world, x, y, z, facing, balance, createdAt, name, notifyEnabled);
     }
 
     /**
@@ -129,6 +132,22 @@ public class Shop {
         if (name != null && !name.isBlank()) {
             this.name = name.trim();
         }
+    }
+
+    /**
+     * @return NPC 购买提示是否启用（true 时向店主广播购买消息）
+     */
+    public boolean notifyEnabled() {
+        return notifyEnabled;
+    }
+
+    /**
+     * 设置 NPC 购买提示开关。
+     *
+     * @param notifyEnabled 是否启用
+     */
+    public void notifyEnabled(boolean notifyEnabled) {
+        this.notifyEnabled = notifyEnabled;
     }
 
     /**

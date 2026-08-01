@@ -25,7 +25,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       由 NpcManager 调用 {@link #startDeliberation()} 进入徘徊）</li>
  *   <li>{@link State#DELIBERATING}：到达货架后原地站立，由 impatience 决定的
  *       次数/间隔多次判定；到点返回 {@link TickResult#ROLL_DUE} 交 NpcManager roll，
- *       命中或耗尽则由 NpcManager 调 {@link #startLeaving()}</li>
+ *       命中或耗尽则由 NpcManager 调 {@link #startLingering()}</li>
+ *   <li>{@link State#LINGER}：判定结束后原地停留，展示 BUY/GIVE_UP 结果文本，
+ *       计时器倒数到 0 自动调 {@link #startLeaving()} 切换到 LEAVING</li>
  *   <li>{@link State#LEAVING}：使用逆向 {@link #path} 返回，
  *       全部走完返回 {@link TickResult#DESPAWN}</li>
  * </ul></p>
@@ -95,7 +97,9 @@ public class SimNpc {
         MOVING,
         /** 到达货架，原地站立思考中（多次判定 + 计时器驱动） */
         DELIBERATING,
-        /** 购买完成/判定耗尽，沿逆向路径离开中 */
+        /** 判定结束（成交/放弃），原地停留展示结果文本，停留结束后转 LEAVING */
+        LINGER,
+        /** 沿逆向路径离开中 */
         LEAVING,
         /** 换架中：在两货架间直线移动（带碰撞跳跃/绕行/超时传送兜底） */
         SWITCHING
@@ -134,6 +138,9 @@ public class SimNpc {
     private int deliberationTicksUntilNextRoll;
     private int deliberationIntervalTicks;
     private double deliberationProbability;
+
+    // 判定后停留参数（LINGER 状态，由 startLingering 初始化）
+    private int lingerTicksRemaining;
 
     // 换架参数（SWITCHING 状态，由 switchShelf() 初始化）
     private Location switchTargetLoc;
@@ -191,7 +198,7 @@ public class SimNpc {
      * 触发（{@code ticksUntilNextRoll=0}，下一 tick 即返回 {@link TickResult#ROLL_DUE}）。</p>
      *
      * <p>徘徊期间 NPC 原地不动，{@link #tick()} 在到点时返回 ROLL_DUE，由
-     * NpcManager 执行 roll 并决定后续（命中→startLeaving / 耗尽→startLeaving /
+     * NpcManager 执行 roll 并决定后续（命中→startLingering / 耗尽→startLingering /
      * 仍有余量→等待下次）。NpcManager 无需调用任何"重置计时器"方法——tick() 在
      * 返回 ROLL_DUE 时已将 ticksUntilNextRoll 重置为 intervalTicks。</p>
      *
@@ -229,6 +236,9 @@ public class SimNpc {
     public TickResult tick() {
         if (state == State.DELIBERATING) {
             return tickDeliberating();
+        }
+        if (state == State.LINGER) {
+            return tickLinger();
         }
         if (state == State.SWITCHING) {
             return tickSwitching();
@@ -329,7 +339,7 @@ public class SimNpc {
      *
      * <p>到点时 {@code rollsDone++} 并将 {@code ticksUntilNextRoll} 重置为
      * {@code intervalTicks}，返回 ROLL_DUE 交由 NpcManager 执行 roll。NpcManager
-     * 据命中/耗尽决定 startLeaving（state 变更后不再进入本方法）或等待下次。</p>
+     * 据命中/耗尽决定 startLingering（state 变更后不再进入本方法）或等待下次。</p>
      *
      * @return ROLL_DUE（到点）或 IDLE（未到点）
      */
@@ -437,6 +447,45 @@ public class SimNpc {
         }
         this.waypointIndex = 0;
         this.state = State.LEAVING;
+    }
+
+    /**
+     * 进入判定后停留状态（LINGER）：原地站立展示 BUY/GIVE_UP 文本，
+     * 停留 {@code ticks} 后自动切换到 {@link State#LEAVING}。
+     *
+     * <p>由 NpcManager 在判定结束（成交或放弃）后调用，替代直接 {@link #startLeaving()}，
+     * 让 NPC "看完商品再走开"，避免判定一结束就立刻转身离开的突兀感。
+     * 停留期间 NPC 不移动，思考文本由 {@link ThoughtDisplayManager} 的 flash 机制展示。</p>
+     *
+     * <p>停留计时器倒数到 0 时，本方法内部调用 {@link #startLeaving()} 切换状态，
+     * 下一 tick 起开始沿逆向路径离开。</p>
+     *
+     * @param ticks 停留时长（ticks，&gt;=0；0 表示立即离开，等价于直接调 startLeaving）
+     */
+    public void startLingering(int ticks) {
+        if (ticks <= 0) {
+            startLeaving();
+            return;
+        }
+        this.lingerTicksRemaining = ticks;
+        this.state = State.LINGER;
+    }
+
+    /**
+     * LINGER 状态的 tick 逻辑：倒数计时器，到 0 时调用 {@link #startLeaving()} 切换到 LEAVING。
+     *
+     * <p>停留期间返回 {@link TickResult#IDLE}（不移动不发包）；
+     * 切换到 LEAVING 当 tick 也返回 IDLE，下一 tick 起开始移动。</p>
+     *
+     * @return IDLE（停留中或刚切换到 LEAVING）
+     */
+    private TickResult tickLinger() {
+        if (lingerTicksRemaining > 0) {
+            lingerTicksRemaining--;
+            return TickResult.IDLE;
+        }
+        startLeaving();
+        return TickResult.IDLE;
     }
 
     /**

@@ -5,6 +5,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
@@ -29,7 +31,8 @@ public class DatabaseManager {
      * Shop 表的不可变数据载体（DAO 入参/出参）。
      *
      * <p>location 拆分为 world + x + y + z 便于 SQL 查询与索引；facing 存字符串枚举名
-     * （NORTH/SOUTH/EAST/WEST）；balance 为玩家待提现金额；createdAt 为毫秒时间戳。</p>
+     * （NORTH/SOUTH/EAST/WEST）；balance 为玩家待提现金额；createdAt 为毫秒时间戳；
+     * notifyEnabled 表示 NPC 购买时是否向店主广播提示（默认 true）。</p>
      */
     public record ShopRecord(
             String id,
@@ -39,7 +42,8 @@ public class DatabaseManager {
             String facing,
             double balance,
             long createdAt,
-            String name
+            String name,
+            boolean notifyEnabled
     ) {
     }
 
@@ -98,8 +102,12 @@ public class DatabaseManager {
                 facing TEXT NOT NULL,
                 balance REAL NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL,
-                name TEXT NOT NULL DEFAULT ''
+                name TEXT NOT NULL DEFAULT '',
+                notify_enabled INTEGER NOT NULL DEFAULT 1
             )""";
+
+    /** 旧库迁移：若 shops 表缺少 notify_enabled 列则添加（SQLite 不支持 IF NOT EXISTS for ADD COLUMN）。 */
+    private static final String SQL_MIGRATE_SHOPS_NOTIFY = "ALTER TABLE shops ADD COLUMN notify_enabled INTEGER NOT NULL DEFAULT 1";
 
     private static final String SQL_CREATE_SHOPS_INDEX =
             "CREATE INDEX IF NOT EXISTS idx_shops_owner ON shops(owner_uuid)";
@@ -192,8 +200,31 @@ public class DatabaseManager {
                 stmt.execute(SQL_CREATE_PURCHASE_LOG);
                 stmt.execute(SQL_CREATE_PURCHASE_LOG_INDEX);
             }
+
+            // 旧库迁移：若 shops 表缺少 notify_enabled 列则添加
+            migrateShopsNotifyEnabled();
         } finally {
             lock.unlock();
+        }
+    }
+
+    /**
+     * 旧库迁移：通过 PRAGMA table_info 检查 shops 表是否已有 notify_enabled 列，
+     * 缺失则执行 ALTER TABLE ADD COLUMN（默认值 1，等价于已开启提示）。
+     * 重复执行是安全的：列已存在时跳过。
+     */
+    private void migrateShopsNotifyEnabled() throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement("PRAGMA table_info(shops)");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                if ("notify_enabled".equalsIgnoreCase(rs.getString("name"))) {
+                    return; // 列已存在，无需迁移
+                }
+            }
+        }
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(SQL_MIGRATE_SHOPS_NOTIFY);
+            plugin.getLogger().info("已迁移 shops 表：新增 notify_enabled 列（默认 1=开启）");
         }
     }
 

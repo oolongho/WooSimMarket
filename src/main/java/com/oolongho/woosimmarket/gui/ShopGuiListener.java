@@ -22,7 +22,10 @@ import org.bukkit.event.inventory.InventoryDragEvent;
  *       信息按钮 → 调度下一 tick 关闭 GUI 并进入改名态（{@link com.oolongho.woosimmarket.shop.ShopNamingManager}）；
  *       提现按钮 → 调用 {@link EconomyManager#withdrawShopBalance} 提现余额到玩家账户，
  *       根据结果发送消息并刷新 GUI 显示新余额；标准价表按钮 → 打开 {@link PriceTableGui}；
- *       统计按钮 → 打开 {@link StatsGui} 交易统计面板（构造时内部异步查询）。</li>
+ *       统计按钮 → 打开 {@link StatsGui} 交易统计面板（构造时内部异步查询）；
+ *       购买提示开关 → 翻转 {@code shop.notifyEnabled} 并刷新按钮；
+ *       一键货架切换 → 调用 {@link com.oolongho.woosimmarket.shop.ShopManager#toggleAllShelves}
+ *       切换所有货架状态并刷新按钮。</li>
  *   <li>{@link InventoryDragEvent}：涉及任何槽位时取消（防止物品拖入覆盖边框/按钮）。</li>
  * </ul>
  *
@@ -77,6 +80,10 @@ public class ShopGuiListener implements Listener {
             handlePriceTableClick(gui, player);
         } else if (raw == ShopGui.SLOT_STATS) {
             handleStatsClick(gui, player);
+        } else if (raw == ShopGui.SLOT_NOTIFY_TOGGLE) {
+            handleNotifyToggle(gui, player);
+        } else if (raw == ShopGui.SLOT_SHELF_TOGGLE) {
+            handleShelfToggle(gui, player);
         }
     }
 
@@ -155,5 +162,31 @@ public class ShopGuiListener implements Listener {
      */
     private void handlePriceTableClick(ShopGui gui, Player player) {
         new PriceTableGui(gui.getShop(), economyManager, plugin.getMarketManager(), messages, plugin.getConfigLoader()).open(player);
+    }
+
+    /**
+     * 购买提示开关：翻转 notifyEnabled 并落库，刷新按钮显示新状态。
+     */
+    private void handleNotifyToggle(ShopGui gui, Player player) {
+        Shop shop = gui.getShop();
+        boolean newState = !shop.notifyEnabled();
+        plugin.getShopManager().setNotifyEnabled(shop, newState);
+        gui.refresh(messages);
+        messages.send(player, newState ? "shop-notify-on" : "shop-notify-off");
+    }
+
+    /**
+     * 一键货架切换：调用 {@link com.oolongho.woosimmarket.shop.ShopManager#toggleAllShelves}
+     * 切换所有货架状态，刷新按钮并发送反馈消息。商店无货架时提示无操作。
+     */
+    private void handleShelfToggle(ShopGui gui, Player player) {
+        Shop shop = gui.getShop();
+        Boolean result = plugin.getShopManager().toggleAllShelves(shop);
+        if (result == null) {
+            messages.send(player, "shop-shelf-empty");
+            return;
+        }
+        gui.refresh(messages);
+        messages.send(player, result ? "shop-shelf-all-enabled" : "shop-shelf-all-disabled");
     }
 }

@@ -104,7 +104,7 @@ public class PriceTableGuiListener implements Listener {
     private void handleBackClick(PriceTableGui gui, Player player) {
         Bukkit.getScheduler().runTask(plugin, () -> {
             player.closeInventory();
-            new ShopGui(gui.getShop(), economyManager, messages).open(player);
+            new ShopGui(gui.getShop(), economyManager, messages, plugin.getShopManager()).open(player);
         });
     }
 }
