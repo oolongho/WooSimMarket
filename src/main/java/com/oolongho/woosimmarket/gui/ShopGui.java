@@ -185,51 +185,59 @@ public class ShopGui implements InventoryHolder {
     }
 
     /**
-     * 购买提示开关按钮：显示名反映当前状态（已开启/已关闭），lore 提示点击切换。
+     * 购买提示开关按钮：固定显示名"购买提示"，lore 第一行显示当前状态（已开启/已关闭），
+     * 第二行通用提示"点击切换"。
      */
     private static ItemStack createNotifyButton(Shop shop, Messages messages) {
         ItemStack item = new ItemStack(Material.BELL);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.displayName(shop.notifyEnabled()
-                    ? messages.get("gui-shop-notify-on")
-                    : messages.get("gui-shop-notify-off"));
-            meta.lore(List.of(messages.get("gui-shop-notify-lore")));
+            meta.displayName(messages.get("gui-shop-notify"));
+            meta.lore(List.of(
+                    shop.notifyEnabled()
+                            ? messages.get("gui-shop-notify-on")
+                            : messages.get("gui-shop-notify-off"),
+                    messages.get("gui-shop-notify-lore")));
             item.setItemMeta(meta);
         }
         return item;
     }
 
     /**
-     * 一键货架切换按钮：显示名为"一键货架切换"，
-     * lore 第一行显示目标动作（有禁用则"全部启用"，否则"全部禁用"），
-     * 第二行为切换提示。
+     * 一键货架切换按钮：羊毛材质（任一禁用=RED_WOOL，全启用=LIME_WOOL），
+     * 显示名"一键切换"，lore 三行：
+     * <ol>
+     *   <li>状态行：已启用 {enabled}/{total}（颜色按全/部分启用）</li>
+     *   <li>目标动作行：全部启用 / 全部禁用</li>
+     *   <li>点击动作描述：点击启用/禁用所有货架</li>
+     * </ol>
      */
     private static ItemStack createShelfToggleButton(Shop shop, ShopManager shopManager, Messages messages) {
-        ItemStack item = new ItemStack(Material.CHEST);
+        List<Shelf> shelves = shopManager.getShelvesByShop(shop.id());
+        int total = shelves.size();
+        long enabled = shelves.stream().filter(Shelf::enabled).count();
+        boolean allEnabled = enabled == total;
+        boolean anyDisabled = !allEnabled;
+
+        ItemStack item = new ItemStack(anyDisabled ? Material.RED_WOOL : Material.LIME_WOOL);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.displayName(messages.get("gui-shop-shelf-toggle"));
-            String actionKey = hasAnyDisabledShelf(shop, shopManager)
+            String statusKey = allEnabled
+                    ? "gui-shop-shelf-status-all"
+                    : "gui-shop-shelf-status-partial";
+            String actionKey = anyDisabled
                     ? "gui-shop-shelf-enable-all"
                     : "gui-shop-shelf-disable-all";
+            String clickKey = anyDisabled
+                    ? "gui-shop-shelf-click-enable"
+                    : "gui-shop-shelf-click-disable";
             meta.lore(List.of(
+                    messages.get(statusKey, "enabled", String.valueOf(enabled), "total", String.valueOf(total)),
                     messages.get(actionKey),
-                    messages.get("gui-shop-shelf-toggle-lore")));
+                    messages.get(clickKey)));
             item.setItemMeta(meta);
         }
         return item;
-    }
-
-    /**
-     * 检查商店是否有任一禁用货架（用于判定货架切换按钮的目标动作）。
-     */
-    private static boolean hasAnyDisabledShelf(Shop shop, ShopManager shopManager) {
-        for (Shelf s : shopManager.getShelvesByShop(shop.id())) {
-            if (!s.enabled()) {
-                return true;
-            }
-        }
-        return false;
     }
 }

@@ -67,6 +67,8 @@ public class NpcManager {
 
     private BukkitTask tickTask;
     private BukkitTask spawnTask;
+    /** 待生成的分布式延迟任务列表（每次 scheduleSpawn 排出，stop/reschedule 时一并取消）。 */
+    private final List<BukkitTask> pendingSpawnTasks = new ArrayList<>();
 
     public NpcManager(WooSimMarket plugin, ShopManager shopManager,
                       NpcPacketSender packetSender, ConfigLoader configLoader,
@@ -111,6 +113,11 @@ public class NpcManager {
             spawnTask.cancel();
             spawnTask = null;
         }
+        // 取消所有待生成的延迟任务，避免 stop 后仍触发 spawn
+        for (BukkitTask task : pendingSpawnTasks) {
+            task.cancel();
+        }
+        pendingSpawnTasks.clear();
         for (SimNpc npc : new ArrayList<>(npcsById.values())) {
             despawnNpc(npc);
         }
@@ -419,26 +426,41 @@ public class NpcManager {
     }
 
     /**
-     * 定时生成 NPC：遍历所有商店，补满至目标数量。
+     * 定时生成 NPC：遍历所有商店，把需要补充的 NPC 数量按"每只独立随机延迟"排开，
+     * 在生成周期内分散刷出（避免一次性补满导致多个 NPC 同时出现）。
      *
-     * <p>目标数量 = {@code min(max-concurrent, max(1, ceil(启用货架数 × spawn-factor)))}。
-     * 通过 while 循环补满，而非单次只生成 1 个，让 NPC 数量随货架数动态伸缩。
-     * 防御：若 trySpawnNpc 未成功生成（如货架为空），跳出避免死循环。</p>
+     * <p>策略：对每个商店计算 {@code toSpawn = targetCount - currentCount}，
+     * 为每只 NPC 在 {@code [0, spawnIntervalTicks]} 区间均匀采样一个延迟，
+     * 独立调度 {@link #trySpawnNpc}。任务执行时再次校验未超目标数量，
+     * 防止期间 stop/reload 导致超量。</p>
      */
     private void scheduleSpawn() {
+        // 取本次生成周期作为延迟窗口（与下次 spawn 间隔一致，秒 → ticks）
+        int minSec = configLoader.getNpcSpawnIntervalMin();
+        int maxSec = configLoader.getNpcSpawnIntervalMax();
+        int windowTicks = ThreadLocalRandom.current().nextInt(minSec, maxSec + 1) * 20;
+
         for (Shop shop : shopManager.getAllShops()) {
             int current = countNpcsByShop(shop.id());
-            // 计算目标数量：min(max-concurrent, 已启用可售货架数 × spawn-factor)
             List<Shelf> shelves = shopManager.getShelvesByShop(shop.id());
             long enabledCount = shelves.stream().filter(Shelf::canSell).count();
             int targetCount = (int) Math.min(
                     configLoader.getNpcMaxConcurrent(),
                     Math.max(1, (int) Math.ceil(enabledCount * configLoader.getNpcSpawnFactor())));
-            while (countNpcsByShop(shop.id()) < targetCount) {
-                trySpawnNpc(shop);
-                // 防御：如果 trySpawnNpc 没有成功生成（如货架为空），跳出
-                if (countNpcsByShop(shop.id()) == current) break;
-                current = countNpcsByShop(shop.id());
+            int toSpawn = Math.max(0, targetCount - current);
+            if (toSpawn <= 0) {
+                continue;
+            }
+            for (int i = 0; i < toSpawn; i++) {
+                long delayTicks = ThreadLocalRandom.current().nextLong(0, windowTicks + 1);
+                BukkitTask task = TaskUtil.runLater(plugin, () -> {
+                    // 防御：调度期间可能已 stop 或 targetCount 已变化
+                    if (countNpcsByShop(shop.id()) >= targetCount) {
+                        return;
+                    }
+                    trySpawnNpc(shop);
+                }, delayTicks);
+                pendingSpawnTasks.add(task);
             }
         }
         scheduleNextSpawn();
@@ -590,6 +612,11 @@ public class NpcManager {
         if (spawnTask != null) {
             spawnTask.cancel();
         }
+        // 取消所有待生成的延迟任务，避免 reload 后旧任务仍触发 spawn 导致超量
+        for (BukkitTask task : pendingSpawnTasks) {
+            task.cancel();
+        }
+        pendingSpawnTasks.clear();
         scheduleNextSpawn();
     }
 

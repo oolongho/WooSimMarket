@@ -111,8 +111,13 @@ public class PriceTableGui implements InventoryHolder {
 
     private void renderPage() {
         ItemStack border = createBorder();
+        // 只填边框槽（非商品槽），商品槽保持 AIR 让玩家看到黑色空槽
         for (int i = 0; i < SIZE; i++) {
-            inventory.setItem(i, border);
+            if (!isItemSlot(i)) {
+                inventory.setItem(i, border);
+            } else {
+                inventory.setItem(i, null);
+            }
         }
 
         inventory.setItem(SLOT_BACK, createNavButton(Material.BOOK,
@@ -127,6 +132,18 @@ public class PriceTableGui implements InventoryHolder {
             Map.Entry<String, ItemInfo> e = entries.get(i);
             inventory.setItem(ITEM_SLOTS[i - start], createItemEntry(e.getKey(), e.getValue()));
         }
+    }
+
+    /**
+     * 判断槽位是否为商品槽（用于 renderPage 跳过填充玻璃板）。
+     */
+    private static boolean isItemSlot(int slot) {
+        for (int s : ITEM_SLOTS) {
+            if (s == slot) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private ItemStack createItemEntry(String itemId, ItemInfo info) {
