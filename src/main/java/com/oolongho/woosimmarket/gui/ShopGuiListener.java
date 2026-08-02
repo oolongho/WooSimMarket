@@ -177,7 +177,8 @@ public class ShopGuiListener implements Listener {
 
     /**
      * 一键货架切换：调用 {@link com.oolongho.woosimmarket.shop.ShopManager#toggleAllShelves}
-     * 切换所有货架状态，刷新按钮并发送反馈消息。商店无货架时提示无操作。
+     * 切换所有货架状态，同步刷新全息显示（{@link com.oolongho.woosimmarket.visualize.ShelfDisplayManager#refreshShelf}），
+     * 刷新按钮并发送反馈消息。商店无货架时提示无操作。
      */
     private void handleShelfToggle(ShopGui gui, Player player) {
         Shop shop = gui.getShop();
@@ -185,6 +186,10 @@ public class ShopGuiListener implements Listener {
         if (result == null) {
             messages.send(player, "shop-shelf-empty");
             return;
+        }
+        // 同步刷新所有货架的全息显示（启用→生成展示，禁用→移除展示）
+        for (com.oolongho.woosimmarket.model.Shelf shelf : plugin.getShopManager().getShelvesByShop(shop.id())) {
+            plugin.getShelfDisplayManager().refreshShelf(shelf);
         }
         gui.refresh(messages);
         messages.send(player, result ? "shop-shelf-all-enabled" : "shop-shelf-all-disabled");
