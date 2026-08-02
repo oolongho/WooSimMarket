@@ -165,13 +165,14 @@ public class ShopManager {
      * 一键切换商店所有货架的启用状态。
      *
      * <p>策略：若存在任一禁用货架 → 全部启用；否则全部禁用。
-     * 返回最终目标状态（true=已全部启用，false=已全部禁用）。
+     * 返回 {@link ToggleResult}，包含最终目标状态与变更后的货架列表，
+     * 供调用方直接复用（如刷新全息显示），避免重复查询。
      * 商店无货架时返回 null（无操作）。</p>
      *
      * @param shop 商店
-     * @return 切换后的目标状态；商店无货架返回 null
+     * @return 切换结果（目标状态 + 货架列表）；商店无货架返回 null
      */
-    public Boolean toggleAllShelves(Shop shop) {
+    public ToggleResult toggleAllShelves(Shop shop) {
         List<Shelf> shelves = getShelvesByShop(shop.id());
         if (shelves.isEmpty()) {
             return null;
@@ -190,7 +191,13 @@ public class ShopManager {
                 shelfDao.update(s.toRecord());
             }
         }
-        return target;
+        return new ToggleResult(target, shelves);
+    }
+
+    /**
+     * 一键切换结果：目标状态 + 变更后的货架列表（供调用方复用刷新展示）。
+     */
+    public record ToggleResult(boolean targetEnabled, List<Shelf> shelves) {
     }
 
     /**

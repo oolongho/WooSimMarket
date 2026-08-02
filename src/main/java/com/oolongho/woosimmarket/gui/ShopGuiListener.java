@@ -4,6 +4,7 @@ import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
 import com.oolongho.woosimmarket.model.Shop;
+import com.oolongho.woosimmarket.shop.ShopManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -182,16 +183,16 @@ public class ShopGuiListener implements Listener {
      */
     private void handleShelfToggle(ShopGui gui, Player player) {
         Shop shop = gui.getShop();
-        Boolean result = plugin.getShopManager().toggleAllShelves(shop);
+        ShopManager.ToggleResult result = plugin.getShopManager().toggleAllShelves(shop);
         if (result == null) {
             messages.send(player, "shop-shelf-empty");
             return;
         }
-        // 同步刷新所有货架的全息显示（启用→生成展示，禁用→移除展示）
-        for (com.oolongho.woosimmarket.model.Shelf shelf : plugin.getShopManager().getShelvesByShop(shop.id())) {
+        // 复用 toggleAllShelves 已查询的货架列表，避免重复遍历
+        for (com.oolongho.woosimmarket.model.Shelf shelf : result.shelves()) {
             plugin.getShelfDisplayManager().refreshShelf(shelf);
         }
         gui.refresh(messages);
-        messages.send(player, result ? "shop-shelf-all-enabled" : "shop-shelf-all-disabled");
+        messages.send(player, result.targetEnabled() ? "shop-shelf-all-enabled" : "shop-shelf-all-disabled");
     }
 }
