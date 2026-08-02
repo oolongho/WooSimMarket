@@ -5,6 +5,7 @@ import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
 import com.oolongho.woosimmarket.market.MarketManager;
 import com.oolongho.woosimmarket.market.MarketManager.ItemInfo;
+import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.model.Shop;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -54,6 +55,7 @@ public class PriceTableGui implements InventoryHolder {
     };
 
     private final Shop shop;
+    private final Shelf sourceShelf;
     private final EconomyManager economyManager;
     private final MarketManager marketManager;
     private final Messages messages;
@@ -63,16 +65,31 @@ public class PriceTableGui implements InventoryHolder {
     private final int totalPages;
     private int currentPage;
 
+    /**
+     * 从商店面板入口构造（返回时回到 ShopGui）。
+     */
     public PriceTableGui(Shop shop, EconomyManager economyManager, MarketManager marketManager,
                          Messages messages, ConfigLoader configLoader) {
+        this(shop, null, economyManager, marketManager, messages, configLoader);
+    }
+
+    /**
+     * 从货架面板入口构造（返回时回到 ShelfGui）。
+     *
+     * @param shop         商店（用于 ShopGui 返回路径，sourceShelf 非空时本字段仅在 shop 仍存在时使用）
+     * @param sourceShelf  来源货架（非空表示从 ShelfGui 进入；为空表示从 ShopGui 进入）
+     */
+    public PriceTableGui(Shop shop, Shelf sourceShelf, EconomyManager economyManager,
+                         MarketManager marketManager, Messages messages, ConfigLoader configLoader) {
         this.shop = shop;
+        this.sourceShelf = sourceShelf;
         this.economyManager = economyManager;
         this.marketManager = marketManager;
         this.messages = messages;
         this.configLoader = configLoader;
         this.inventory = Bukkit.createInventory(this, SIZE, messages.get("gui-price-table-title"));
+        // 保序：MarketManager.getItemInfos() 返回 LinkedHashMap，按 items.yml 配置顺序
         this.entries = new ArrayList<>(marketManager.getItemInfos().entrySet());
-        this.entries.sort(Map.Entry.comparingByKey());
         this.totalPages = Math.max(1, (entries.size() + ITEMS_PER_PAGE - 1) / ITEMS_PER_PAGE);
         this.currentPage = 0;
         renderPage();
@@ -84,6 +101,13 @@ public class PriceTableGui implements InventoryHolder {
 
     public Shop getShop() {
         return shop;
+    }
+
+    /**
+     * 返回来源货架（从 ShelfGui 进入时非空；从 ShopGui 进入时为空）。
+     */
+    public Shelf getSourceShelf() {
+        return sourceShelf;
     }
 
     /** 翻到上一页（首页时不翻）。 */

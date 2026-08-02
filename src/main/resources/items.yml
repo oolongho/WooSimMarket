@@ -1,20 +1,185 @@
 # WooSimMarket 标准价表
 # 每个条目定义物品的标准价格与可选价格敏感度：
 #   standard-price:    标准价（NPC 购买判定的基准价）
-#   price-sensitivity: 物品价格敏感度（价格因子的指数基准，-1 表示用 market.yml 全局值，默认可省略）
+#   price-sensitivity: 物品价格敏感度（价格因子的指数基准，省略则用 market.yml 全局值）
+#
+# 价格敏感度参考：
+#   < 1.0：刚需/慷慨（食物、基础材料）—— 即使涨价也买
+#   = 1.0：标准理性
+#   > 1.0：挑剔/吝啬（奢侈品、可量产）—— 稍微涨价就不买
+# 全局默认 sensitivity: 2.0（见 market.yml），多数物品省略此项继承全局
 
 items:
+  # ===== 矿物与矿石 =====
   DIAMOND:
-    standard-price: 100.0
-    # 稀有物品，但可量产，价格敏感度稍微低于全局（提价影响更小）
-    price-sensitivity: 1.8
+    standard-price: 500.0
+    price-sensitivity: 1.0  # 稀有但可量产，反应适中
+  EMERALD:
+    standard-price: 400.0
+  NETHERITE_INGOT:
+    standard-price: 2000.0
+    price-sensitivity: 1.5  # 极稀有，玩家惜售
+  GOLD_INGOT:
+    standard-price: 50.0
   IRON_INGOT:
-    standard-price: 2.0
-    # 常见物品：铁锭因为刷铁机的存在，设置价格敏感度更高
-    price-sensitivity: 4
-  BREAD:
+    standard-price: 20.0
+    price-sensitivity: 4.0  # 刷铁机存在，产量敏感
+  COPPER_INGOT:
+    standard-price: 10.0
+  COAL:
     standard-price: 5.0
+  LAPIS_LAZULI:
+    standard-price: 5.0
+  REDSTONE:
+    standard-price: 3.0
+  QUARTZ:
+    standard-price: 5.0
+  AMETHYST_SHARD:
+    standard-price: 15.0
+  RAW_IRON:
+    standard-price: 15.0
+  RAW_GOLD:
+    standard-price: 40.0
+  RAW_COPPER:
+    standard-price: 8.0
+
+  # ===== 建材与物流 =====
+  WHITE_WOOL:
+    standard-price: 5.0
+  STONE:
+    standard-price: 2.0
+  COBBLESTONE:
+    standard-price: 1.0
+  DIRT:
+    standard-price: 0.5
+  GRASS_BLOCK:
+    standard-price: 2.0
+  SAND:
+    standard-price: 1.0
+  GRAVEL:
+    standard-price: 1.0
+  CLAY_BALL:
+    standard-price: 3.0
+  OBSIDIAN:
+    standard-price: 40.0
+  GLASS:
+    standard-price: 3.0
+  BRICKS:
+    standard-price: 5.0
+  DEEPSLATE:
+    standard-price: 2.0
+  COBBLED_DEEPSLATE:
+    standard-price: 1.0
+
+  # ===== 木材 =====
+  OAK_LOG:
+    standard-price: 8.0
+  SPRUCE_LOG:
+    standard-price: 8.0
+  BIRCH_LOG:
+    standard-price: 8.0
+  JUNGLE_LOG:
+    standard-price: 8.0
+  ACACIA_LOG:
+    standard-price: 8.0
+  DARK_OAK_LOG:
+    standard-price: 8.0
+  MANGROVE_LOG:
+    standard-price: 8.0
+  CHERRY_LOG:
+    standard-price: 8.0
+  PALE_OAK_LOG:
+    standard-price: 8.0
+  BAMBOO:
+    standard-price: 2.0
+
+  # ===== 农业与食物 =====
+  WHEAT:
+    standard-price: 5.0
+  CARROT:
+    standard-price: 4.0
+  POTATO:
+    standard-price: 4.0
+  BEETROOT:
+    standard-price: 4.0
+  MELON_SLICE:
+    standard-price: 1.0
+  PUMPKIN:
+    standard-price: 6.0
+  BREAD:
+    standard-price: 10.0
+    price-sensitivity: 0.8  # 基础食物，刚需
+  APPLE:
+    standard-price: 10.0
   GOLDEN_APPLE:
     standard-price: 200.0
-    # 稀有物品，且一般不会卖，价格敏感度低于全局（提价影响更小）
-    price-sensitivity: 1.2
+    price-sensitivity: 1.5  # 奢侈品，挑剔
+  COOKED_BEEF:
+    standard-price: 15.0
+  COOKED_PORKCHOP:
+    standard-price: 15.0
+  COOKED_CHICKEN:
+    standard-price: 12.0
+  COOKED_MUTTON:
+    standard-price: 12.0
+  SWEET_BERRIES:
+    standard-price: 2.0
+  GLOW_BERRIES:
+    standard-price: 4.0
+  COCOA_BEANS:
+    standard-price: 5.0
+  SUGAR_CANE:
+    standard-price: 3.0
+  CACTUS:
+    standard-price: 3.0
+  KELP:
+    standard-price: 1.0
+
+  # ===== 怪物掉落 =====
+  ROTTEN_FLESH:
+    standard-price: 1.0
+  BONE:
+    standard-price: 3.0
+  SPIDER_EYE:
+    standard-price: 3.0
+  GUNPOWDER:
+    standard-price: 10.0
+  STRING:
+    standard-price: 2.0
+  ENDER_PEARL:
+    standard-price: 25.0
+  BLAZE_ROD:
+    standard-price: 30.0
+  GHAST_TEAR:
+    standard-price: 50.0
+  MAGMA_CREAM:
+    standard-price: 15.0
+  SLIME_BALL:
+    standard-price: 10.0
+  PHANTOM_MEMBRANE:
+    standard-price: 20.0
+  LEATHER:
+    standard-price: 8.0
+  FEATHER:
+    standard-price: 2.0
+  INK_SAC:
+    standard-price: 5.0
+
+  # ===== 贵重物 =====
+  ENDER_EYE:
+    standard-price: 50.0
+  SHULKER_SHELL:
+    standard-price: 150.0
+  DRAGON_BREATH:
+    standard-price: 100.0
+  TOTEM_OF_UNDYING:
+    standard-price: 1000.0
+    price-sensitivity: 1.5  # 极稀有，挑剔
+  EMERALD_BLOCK:
+    standard-price: 3600.0
+  DIAMOND_BLOCK:
+    standard-price: 4500.0
+  GOLD_BLOCK:
+    standard-price: 450.0
+  IRON_BLOCK:
+    standard-price: 180.0

@@ -13,6 +13,7 @@ import org.bukkit.scheduler.BukkitTask;
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,8 +52,9 @@ public class MarketManager {
     private final PurchaseLogDao purchaseLogDao;
 
     /** 物品标准价表（itemId → ItemInfo）。
-     *  ConcurrentHashMap：异步 recomputeDrift 遍历 + 主线程 reload 写，需线程安全。 */
-    private final Map<String, ItemInfo> itemInfos = new ConcurrentHashMap<>();
+     *  使用 synchronizedMap(LinkedHashMap) 保留 items.yml 配置顺序（供 PriceTableGui 按配置顺序展示），
+     *  同时保证异步 recomputeDrift 遍历 + 主线程 reload 写的线程安全。 */
+    private final Map<String, ItemInfo> itemInfos = Collections.synchronizedMap(new LinkedHashMap<>());
 
     /** 购买动量 EMA 表（itemId → 动量值 ∈[0,1]，缺省 0.5 中性）。不持久化，重启归零。 */
     private final Map<String, Double> purchaseEma = new HashMap<>();
@@ -247,7 +249,12 @@ public class MarketManager {
             return;
         }
         ConfigLoader.DriftConfig cfg = configLoader.getDriftConfig();
-        for (String itemId : itemInfos.keySet()) {
+        // snapshot keySet，避免异步遍历期间主线程 reload 修改 map 抛 ConcurrentModificationException
+        String[] itemIds;
+        synchronized (itemInfos) {
+            itemIds = itemInfos.keySet().toArray(new String[0]);
+        }
+        for (String itemId : itemIds) {
             List<DatabaseManager.PurchaseLogRecord> records = purchaseLogDao.findRecentByItem(itemId, cfg.windowDays());
             if (records.isEmpty()) {
                 continue; // 空样本跳过，drift 保持当前值

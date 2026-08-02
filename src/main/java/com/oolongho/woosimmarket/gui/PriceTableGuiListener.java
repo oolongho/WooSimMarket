@@ -3,6 +3,8 @@ package com.oolongho.woosimmarket.gui;
 import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
+import com.oolongho.woosimmarket.model.Shelf;
+import com.oolongho.woosimmarket.model.Shop;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -96,15 +98,27 @@ public class PriceTableGuiListener implements Listener {
     // ===== 内部处理 =====
 
     /**
-     * 返回按钮：调度到下一 tick 关闭当前 GUI 并打开 ShopGui。
+     * 返回按钮：调度到下一 tick 关闭当前 GUI 并按来源打开上一级。
      *
-     * <p>不在事件处理中直接关闭，避免 InventoryCloseEvent 在 InventoryClickEvent
-     * 处理期间触发，产生嵌套事件导致状态不一致（与 StatsGuiListener 返回按钮同模式）。</p>
+     * <p>来源分支：
+     * <ul>
+     *   <li>{@code sourceShelf != null}（从 ShelfGui 进入）→ 重新打开 ShelfGui</li>
+     *   <li>{@code sourceShelf == null}（从 ShopGui 进入）→ 重新打开 ShopGui</li>
+     * </ul>
+     * 不在事件处理中直接关闭，避免 InventoryCloseEvent 在 InventoryClickEvent
+     * 处理期间触发，产生嵌套事件导致状态不一致。</p>
      */
     private void handleBackClick(PriceTableGui gui, Player player) {
+        Shelf sourceShelf = gui.getSourceShelf();
         Bukkit.getScheduler().runTask(plugin, () -> {
             player.closeInventory();
-            new ShopGui(gui.getShop(), economyManager, messages, plugin.getShopManager()).open(player);
+            if (sourceShelf != null) {
+                // 从货架入口进入：返回 ShelfGui
+                new ShelfGui(sourceShelf, messages).open(player);
+            } else {
+                // 从商店入口进入：返回 ShopGui
+                new ShopGui(gui.getShop(), economyManager, messages, plugin.getShopManager()).open(player);
+            }
         });
     }
 }

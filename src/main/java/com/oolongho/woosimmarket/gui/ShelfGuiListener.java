@@ -3,12 +3,14 @@ package com.oolongho.woosimmarket.gui;
 import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.model.Shelf;
+import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -106,6 +108,8 @@ public class ShelfGuiListener implements Listener {
             handlePriceClick(gui, (Player) event.getWhoClicked());
         } else if (raw == ShelfGui.SLOT_TOGGLE) {
             handleToggleClick(gui);
+        } else if (raw == ShelfGui.SLOT_PRICE_TABLE) {
+            handlePriceTableClick(gui, (Player) event.getWhoClicked());
         }
     }
 
@@ -198,5 +202,21 @@ public class ShelfGuiListener implements Listener {
         shopManager.saveShelf(shelf);
         gui.refresh(messages);
         shelfDisplayManager.refreshShelf(shelf);
+    }
+
+    /**
+     * 标准价表按钮：调度到下一 tick 关闭 GUI 并打开 PriceTableGui（携带 sourceShelf 用于返回）。
+     *
+     * <p>关闭 GUI 会触发 {@link #onClose}，先汇总 9 格 stock 与模板持久化，
+     * 避免玩家在标准价表面板期间货架状态与显示不一致。</p>
+     */
+    private void handlePriceTableClick(ShelfGui gui, Player player) {
+        Shelf shelf = gui.getShelf();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            player.closeInventory();
+            Shop shop = shopManager.getShop(shelf.shopId());
+            new PriceTableGui(shop, shelf, plugin.getEconomyManager(),
+                    plugin.getMarketManager(), messages, plugin.getConfigLoader()).open(player);
+        });
     }
 }

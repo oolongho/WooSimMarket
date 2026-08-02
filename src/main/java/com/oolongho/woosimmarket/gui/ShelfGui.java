@@ -16,16 +16,17 @@ import java.util.List;
 /**
  * 货架管理 GUI（InventoryHolder 模式）。
  *
- * <p>27 格箱子布局（# 边框 / A 商品槽 / B 价格按钮 / C 开关按钮）：
+ * <p>27 格箱子布局（# 边框 / A 商品槽 / B 价格按钮 / C 开关按钮 / D 标准价表按钮）：
  * <pre>
  * ###AAA###
  * #B#AAA#C#
- * ###AAA###
+ * #D#AAA###
  * </pre>
  * <ul>
  *   <li>9 个商品槽 {3,4,5,12,13,14,21,22,23}：玩家放入/取出物品，打开时按 maxStackSize 分配 stock</li>
  *   <li>slot 10：价格按钮（绑定后图标变为绑定物品 Material + 附魔光效，未绑定为 GOLD_INGOT）</li>
  *   <li>slot 16：启用/禁用按钮</li>
+ *   <li>slot 19：标准价表按钮（BOOK，查看全物品标准价）</li>
  *   <li>其余：灰色玻璃边框（不可交互）</li>
  * </ul></p>
  *
@@ -42,6 +43,8 @@ public class ShelfGui implements InventoryHolder {
     public static final int SLOT_PRICE = 10;
     /** 启用/禁用按钮槽位。 */
     public static final int SLOT_TOGGLE = 16;
+    /** 标准价表按钮槽位（BOOK，打开 PriceTableGui）。 */
+    public static final int SLOT_PRICE_TABLE = 19;
     /** 9 个商品槽（按行序，用于 stock 分配与汇总）。 */
     public static final int[] ITEM_SLOTS = {3, 4, 5, 12, 13, 14, 21, 22, 23};
 
@@ -58,13 +61,14 @@ public class ShelfGui implements InventoryHolder {
     private void render(Messages messages) {
         ItemStack border = createBorder();
         for (int i = 0; i < SIZE; i++) {
-            if (!isItemSlot(i) && i != SLOT_PRICE && i != SLOT_TOGGLE) {
+            if (!isItemSlot(i) && i != SLOT_PRICE && i != SLOT_TOGGLE && i != SLOT_PRICE_TABLE) {
                 inventory.setItem(i, border);
             }
         }
         distributeStock();
         inventory.setItem(SLOT_PRICE, createPriceButton(persistentBoundMaterial(), shelf.price(), messages));
         inventory.setItem(SLOT_TOGGLE, createToggleButton(shelf.enabled(), messages));
+        inventory.setItem(SLOT_PRICE_TABLE, createPriceTableButton(messages));
     }
 
     /**
@@ -222,6 +226,20 @@ public class ShelfGui implements InventoryHolder {
         if (meta != null) {
             meta.displayName(messages.get(enabled ? "gui-shelf-enabled" : "gui-shelf-disabled"));
             meta.lore(List.of(messages.get("gui-shelf-toggle-lore")));
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /**
+     * 标准价表按钮：BOOK 图标，点击打开 PriceTableGui（从货架入口时返回 ShelfGui）。
+     */
+    private static ItemStack createPriceTableButton(Messages messages) {
+        ItemStack item = new ItemStack(Material.BOOK);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.displayName(messages.get("gui-shelf-price-table"));
+            meta.lore(List.of(messages.get("gui-shelf-price-table-lore")));
             item.setItemMeta(meta);
         }
         return item;
