@@ -31,6 +31,7 @@ import com.oolongho.woosimmarket.npc.PersonalityManager;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
 import com.oolongho.woosimmarket.shop.ShopNamingManager;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
@@ -93,6 +94,9 @@ public class WooSimMarket extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
+        // 0. 初始化调度工具（Paper/Folia 双轨适配，必须在任何调度调用前完成）
+        SchedulerUtil.initialize(this);
+
         // 1. 配置
         configLoader = new ConfigLoader(this);
         configLoader.initialize();
@@ -136,7 +140,7 @@ public class WooSimMarket extends JavaPlugin {
         // 7.6. 收银台全息展示管理器（依赖 ShopManager 内存数据）
         shopDisplayManager = new ShopDisplayManager(this, shopManager, configLoader, messages);
         shopDisplayManager.init();
-        shopRangeVisualizer = new ShopRangeVisualizer(this, configLoader);
+        shopRangeVisualizer = new ShopRangeVisualizer(configLoader);
 
         // 8. PricingManager
         pricingManager = new PricingManager(shopManager, messages);
@@ -256,7 +260,7 @@ public class WooSimMarket extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(
                 new PriceTableGuiListener(this, economyManager, messages), this);
         Bukkit.getPluginManager().registerEvents(
-                new ChatListener(this, pricingManager, shopNamingManager), this);
+                new ChatListener(pricingManager, shopNamingManager), this);
         Bukkit.getPluginManager().registerEvents(
                 new PlayerListener(npcPacketSender), this);
         Bukkit.getPluginManager().registerEvents(

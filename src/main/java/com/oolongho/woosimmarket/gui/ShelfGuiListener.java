@@ -2,13 +2,13 @@ package com.oolongho.woosimmarket.gui;
 
 import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.Messages;
+import com.oolongho.woosimmarket.hook.CraftEngineHook;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
-import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.EventHandler;
@@ -18,7 +18,7 @@ import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 
 /**
  * 货架 GUI 交互监听器。
@@ -26,10 +26,10 @@ import org.bukkit.inventory.ItemStack;
  * <p>通过 {@link org.bukkit.inventory.InventoryHolder} 类型判断事件归属（{@link ShelfGui}）。
  * 处理三类事件：</p>
  * <ul>
- *   <li>{@link InventoryClickEvent}：9 个商品槽允许自由放入/取出，但放入物品须为已绑定种类
- *       （未绑定时任意种类绑定首个）；shift-click 从背包移入同样校验种类；
- *       number-key/offhand-swap 因种类不可控而取消；按钮槽处理对应逻辑；边框槽取消。</li>
- *   <li>{@link InventoryDragEvent}：拖拽仅允许涉及 9 个商品槽，且拖入物品须为绑定种类（未绑定时任意）。</li>
+ *   <li>{@link InventoryClickEvent}：9 个商品槽允许自由放入/取出，但放入物品须为已绑定 itemId
+ *       （未绑定时任意物品绑定首个）；shift-click 从背包移入同样校验 itemId；
+ *       number-key/offhand-swap 因 itemId 不可控而取消；按钮槽处理对应逻辑；边框槽取消。</li>
+ *   <li>{@link InventoryDragEvent}：拖拽仅允许涉及 9 个商品槽，且拖入物品须为绑定 itemId（未绑定时任意）。</li>
  *   <li>{@link InventoryCloseEvent}：汇总 9 格 stock 与模板，同步 shelf 并落库；9 格全空则解绑。</li>
  * </ul>
  *
@@ -54,7 +54,18 @@ public class ShelfGuiListener implements Listener {
     }
 
     /**
-     * 点击事件：商品槽校验种类后放行，按钮槽处理，边框取消。
+     * 打开事件：注入 CraftEngineHook 后刷新价格按钮（构造时未持有 craftEngine，价格按钮留空）。
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onOpen(InventoryOpenEvent event) {
+        if (!(event.getInventory().getHolder() instanceof ShelfGui gui)) {
+            return;
+        }
+        gui.refresh(messages, plugin.getCraftEngineHook());
+    }
+
+    /**
+     * 点击事件：商品槽校验 itemId 后放行，按钮槽处理，边框取消。
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onClick(InventoryClickEvent event) {
@@ -68,13 +79,14 @@ public class ShelfGuiListener implements Listener {
             return;
         }
 
-        Material bound = gui.liveBoundMaterial();
+        CraftEngineHook craftEngine = plugin.getCraftEngineHook();
+        String bound = gui.liveBoundItemId(craftEngine);
 
         if (raw >= ShelfGui.SIZE) {
-            // 玩家自身背包：shift-click 移入 GUI 时校验种类
+            // 玩家自身背包：shift-click 移入 GUI 时校验 itemId
             if (event.isShiftClick()) {
                 ItemStack src = event.getCurrentItem();
-                if (src != null && !src.getType().isAir() && bound != null && src.getType() != bound) {
+                if (src != null && !src.getType().isAir() && bound != null && !craftEngine.getItemId(src).equals(bound)) {
                     event.setCancelled(true);
                 }
             }
@@ -89,15 +101,15 @@ public class ShelfGuiListener implements Listener {
                 event.setCancelled(true);
                 return;
             }
-            // 非_shift 点击用 cursor 放入，校验种类（shift-click 商品槽为取出，不校验）
+            // 非_shift 点击用 cursor 放入，校验 itemId（shift-click 商品槽为取出，不校验）
             if (!event.isShiftClick()) {
                 ItemStack cursor = event.getCursor();
-                if (cursor != null && !cursor.getType().isAir() && bound != null && cursor.getType() != bound) {
+                if (cursor != null && !cursor.getType().isAir() && bound != null && !craftEngine.getItemId(cursor).equals(bound)) {
                     event.setCancelled(true);
                     return;
                 }
             }
-            // 取出 / 同种类放入：放行
+            // 取出 / 同 itemId 放入：放行
             return;
         }
 
@@ -107,14 +119,14 @@ public class ShelfGuiListener implements Listener {
         if (raw == ShelfGui.SLOT_PRICE) {
             handlePriceClick(gui, (Player) event.getWhoClicked());
         } else if (raw == ShelfGui.SLOT_TOGGLE) {
-            handleToggleClick(gui);
+            handleToggleClick(gui, (Player) event.getWhoClicked());
         } else if (raw == ShelfGui.SLOT_PRICE_TABLE) {
             handlePriceTableClick(gui, (Player) event.getWhoClicked());
         }
     }
 
     /**
-     * 拖拽事件：仅允许涉及 9 个商品槽，且拖入物品须为绑定种类（未绑定时任意）。
+     * 拖拽事件：仅允许涉及 9 个商品槽，且拖入物品须为绑定 itemId（未绑定时任意）。
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onDrag(InventoryDragEvent event) {
@@ -128,11 +140,11 @@ public class ShelfGuiListener implements Listener {
                 return;
             }
         }
-        // 拖入物品须为绑定种类（未绑定时任意）
-        Material bound = gui.liveBoundMaterial();
+        // 拖入物品须为绑定 itemId（未绑定时任意）
+        String bound = gui.liveBoundItemId(plugin.getCraftEngineHook());
         if (bound != null) {
             ItemStack oldCursor = event.getOldCursor();
-            if (oldCursor != null && !oldCursor.getType().isAir() && oldCursor.getType() != bound) {
+            if (oldCursor != null && !oldCursor.getType().isAir() && !plugin.getCraftEngineHook().getItemId(oldCursor).equals(bound)) {
                 event.setCancelled(true);
             }
         }
@@ -172,9 +184,11 @@ public class ShelfGuiListener implements Listener {
             // 9 格全空 → 解绑
             shelf.itemStack(null);
             shelf.stock(0);
+            shelf.itemId(null);
         } else {
             shelf.itemStack(template);
             shelf.stock(stock);
+            shelf.itemId(gui.liveBoundItemId(plugin.getCraftEngineHook()));
         }
         shopManager.saveShelf(shelf);
         shelfDisplayManager.refreshShelf(shelf);
@@ -187,7 +201,7 @@ public class ShelfGuiListener implements Listener {
      */
     private void handlePriceClick(ShelfGui gui, Player player) {
         Shelf shelf = gui.getShelf();
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        SchedulerUtil.runTask(() -> {
             player.closeInventory();
             pricingManager.startPricing(player, shelf);
         });
@@ -196,11 +210,25 @@ public class ShelfGuiListener implements Listener {
     /**
      * 启用/禁用按钮：切换状态、落库、刷新 GUI、刷新展示。
      */
-    private void handleToggleClick(ShelfGui gui) {
+    private void handleToggleClick(ShelfGui gui, Player player) {
         Shelf shelf = gui.getShelf();
+        if (!shelf.enabled()) {
+            Shop shop = shopManager.getShop(shelf.shopId());
+            if (shop == null) {
+                // 商店已被删除（店长破坏收银机等），货架失效
+                player.closeInventory();
+                return;
+            }
+            int limit = shopManager.getShelfLimitForPlayer(player);
+            int current = shopManager.countEnabledShelvesByOwner(shop.ownerUuid());
+            if (current >= limit) {
+                messages.send(player, "shelf-limit-reached", "limit", String.valueOf(limit));
+                return;
+            }
+        }
         shelf.enabled(!shelf.enabled());
         shopManager.saveShelf(shelf);
-        gui.refresh(messages);
+        gui.refresh(messages, plugin.getCraftEngineHook());
         shelfDisplayManager.refreshShelf(shelf);
     }
 
@@ -212,11 +240,12 @@ public class ShelfGuiListener implements Listener {
      */
     private void handlePriceTableClick(ShelfGui gui, Player player) {
         Shelf shelf = gui.getShelf();
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        SchedulerUtil.runTask(() -> {
             player.closeInventory();
             Shop shop = shopManager.getShop(shelf.shopId());
             new PriceTableGui(shop, shelf, plugin.getEconomyManager(),
-                    plugin.getMarketManager(), messages, plugin.getConfigLoader()).open(player);
+                    plugin.getMarketManager(), messages, plugin.getConfigLoader(),
+                    plugin.getCraftEngineHook()).open(player);
         });
     }
 }

@@ -360,25 +360,31 @@ public class SimNpc {
      *
      * <p>不同于 MOVING 的路径点跟随，SWITCHING 是两点直线移动：
      * <ul>
-     *   <li>超时（{@link #switchDeadline}）→ 直接传送至目标，返回 REACHED</li>
+     *   <li>超时（{@link #switchDeadline}）→ 直接传送至目标，返回 MOVING
+     *       （让 NpcManager 发包同步客户端位置，下一 tick 因 dist&lt;reachDistance
+     *       自然走到达分支返回 REACHED）</li>
      *   <li>到达（3D 距离 &lt; {@link #reachDistance}）→ 返回 REACHED</li>
      *   <li>前方 1 格高 + 上方可通行 → 跳上（my 提升至 1.0）</li>
      *   <li>前方 2+ 格高 → 尝试右偏 / 左偏绕行；左右都不通则停在原位等超时</li>
      * </ul>
      * </p>
      *
+     * <p>移动后同样应用 Y 坐标处理（重力下坠 + 台阶攀爬 + 方块顶吸附），
+     * 与 {@link #tick()} 一致，避免 NPC 在两货架间跨越深坑/高度差时悬空。</p>
+     *
      * <p>到达后 state 仍为 SWITCHING（不切换），由 NpcManager 调用
      * {@link #resumeDeliberation()} 切回 DELIBERATING。</p>
      *
-     * @return REACHED（到达/超时）/ MOVED（移动一步）/ IDLE（撞墙等待超时）
+     * @return REACHED（到达）/ MOVING（移动一步或超时传送）/ IDLE（撞墙等待超时）
      */
     private TickResult tickSwitching() {
-        // 超时检测：超时直接传送至目标
+        // 超时检测：超时直接传送至目标，返回 MOVING 让客户端收包同步位置
+        // （下一 tick 因 dist<reachDistance 自然走到达分支返回 REACHED）
         if (System.currentTimeMillis() > switchDeadline) {
             location.setX(switchTargetLoc.getX());
             location.setY(switchTargetLoc.getY());
             location.setZ(switchTargetLoc.getZ());
-            return TickResult.REACHED;
+            return TickResult.MOVING;
         }
 
         // 朝目标的方向向量
@@ -432,6 +438,31 @@ public class SimNpc {
 
         location.add(mx, my, mz);
         location.setYaw(yaw);
+
+        // Y 坐标处理：重力下坠 + 台阶攀爬 + 方块顶吸附（与 tick() 一致）
+        // 避免两货架间跨越深坑/高度差时 NPC 悬空飘浮
+        if (world != null) {
+            int bx = (int) Math.floor(location.getX());
+            int by = (int) Math.floor(location.getY());
+            int bz = (int) Math.floor(location.getZ());
+            Block feet = world.getBlockAt(bx, by, bz);
+            Block below = world.getBlockAt(bx, by - 1, bz);
+
+            if (feet.getType().isSolid()) {
+                // 脚位固体（穿模/上台阶）→ 上升到脚位方块顶部
+                location.setY(by + 1.0);
+            } else if (below.getType().isAir()) {
+                // 脚下空气（悬空/下台阶）→ 重力下坠
+                location.setY(location.getY() - GRAVITY_FALL);
+            } else {
+                // 脚下固体 → 吸附到方块顶（仅在偏差 > 阈值时才吸附，避免抖动）
+                double top = (by - 1) + 1.0;
+                if (Math.abs(location.getY() - top) > SNAP_THRESHOLD) {
+                    location.setY(top);
+                }
+            }
+        }
+
         return TickResult.MOVING;
     }
 

@@ -4,7 +4,7 @@ import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
 import com.oolongho.woosimmarket.model.Shop;
-import org.bukkit.Bukkit;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -101,7 +101,7 @@ public class StatsGuiListener implements Listener {
      */
     private void handleBackClick(StatsGui gui, Player player) {
         Shop shop = gui.getShop();
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        SchedulerUtil.runTask(() -> {
             player.closeInventory();
             new ShopGui(shop, economyManager, messages, plugin.getShopManager()).open(player);
         });

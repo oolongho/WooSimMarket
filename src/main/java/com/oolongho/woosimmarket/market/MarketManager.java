@@ -4,11 +4,10 @@ import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.database.DatabaseManager;
 import com.oolongho.woosimmarket.database.PurchaseLogDao;
-import com.oolongho.woosimmarket.util.TaskUtil;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.util.Collections;
@@ -38,7 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 24h 时段），主线程仅读 priceDrift（ConcurrentHashMap 保证线程安全）。</p>
  *
  * <p>线程模型：EMA 更新与配置查询在主线程执行；purchase_log 写入与清理通过
- * {@link TaskUtil} 投递到异步线程，避免阻塞主线程。</p>
+ * {@link SchedulerUtil} 投递到异步线程，避免阻塞主线程。</p>
  *
  * @author oolongho
  */
@@ -67,7 +66,7 @@ public class MarketManager {
     private static final double EMA_ALPHA = 0.3;
 
     /** 每日购买日志清理任务（异步），stop() 时取消。 */
-    private BukkitTask cleanupTask;
+    private SchedulerUtil.TaskHandle cleanupTask;
 
     /** 物品标准价信息。priceSensitivity 为 -1 时用全局默认。 */
     public record ItemInfo(String itemId, double standardPrice, double priceSensitivity) {}
@@ -85,7 +84,7 @@ public class MarketManager {
         loadItems();
         // 每日一次异步：先清理过期日志，再重算漂移（24h = 24×60×60×20 ticks）
         // 初始延迟 0：启动后立即异步执行首次 recompute（跨重启连续，主线程 0 阻塞）
-        cleanupTask = TaskUtil.runAsyncAtFixed(plugin,
+        cleanupTask = SchedulerUtil.runAsyncAtFixedRate(
                 () -> { cleanupPurchaseLog(); recomputeDrift(); },
                 0L, 24L * 60 * 60 * 20);
     }
@@ -118,7 +117,7 @@ public class MarketManager {
      * drift.enabled=false 时为空操作。频繁调用无副作用（幂等重算）。</p>
      */
     public void recomputeDriftNow() {
-        TaskUtil.runAsync(plugin, this::recomputeDrift);
+        SchedulerUtil.runTaskAsynchronously(this::recomputeDrift);
     }
 
     /**
@@ -207,7 +206,7 @@ public class MarketManager {
      *
      * <p>EMA 更新（主线程）：{@code ema = ema × (1 − α) + outcome × α}（α=0.3）。
      * 购买 outcome=1.0，不买 outcome=0.0。purchase_log 写入通过
-     * {@link TaskUtil#runAsync} 投递到异步线程，避免阻塞主线程。
+     * {@link SchedulerUtil#runTaskAsynchronously} 投递到异步线程，避免阻塞主线程。
      * id 字段传 0（DAO 忽略，由数据库自增）。</p>
      *
      * @param shopId      商店 id
@@ -221,7 +220,7 @@ public class MarketManager {
         double current = purchaseEma.getOrDefault(itemId, 0.5);
         purchaseEma.put(itemId, current * (1.0 - EMA_ALPHA) + outcome * EMA_ALPHA);
 
-        TaskUtil.runAsync(plugin, () -> purchaseLogDao.insert(
+        SchedulerUtil.runTaskAsynchronously(() -> purchaseLogDao.insert(
                 new DatabaseManager.PurchaseLogRecord(0, shopId, itemId, price, bought, personality, System.currentTimeMillis())));
     }
 

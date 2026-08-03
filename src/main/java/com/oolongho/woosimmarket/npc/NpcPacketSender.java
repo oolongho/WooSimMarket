@@ -8,10 +8,11 @@ import com.mojang.authlib.properties.PropertyMap;
 import com.mojang.datafixers.util.Pair;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.config.Messages;
+import com.oolongho.woosimmarket.npc.adapter.NmsAdapter;
+import com.oolongho.woosimmarket.npc.adapter.NmsAdapterFactory;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
@@ -19,15 +20,13 @@ import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
-import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Avatar;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.PositionMoveRotation;
+import net.minecraft.world.entity.Relative;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 import io.papermc.paper.adventure.PaperAdventure;
@@ -40,6 +39,7 @@ import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.entity.Player;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -57,10 +57,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>负责向客户端发送 NPC 的生成、移动、移除数据包。不创建任何服务端实体，
  * 所有 NPC 仅存在于客户端渲染层面。</p>
  *
+ * <p>跨版本兼容：spawn 与 teleport 包构造委托给 {@link NmsAdapter}，
+ * 由 {@link NmsAdapterFactory} 运行时按服务端版本选择 Legacy（1.21.0/1）或
+ * Modern（1.21.2+ 及 26.1+）实现。{@code DATA_PLAYER_MODE_CUSTOMISATION} 的
+ * accessor 在 26.1+ 位于 {@code Avatar}、1.21.x 位于 {@code player.Player}，
+ * 通过反射按类名依次尝试避免编译期硬依赖。</p>
+ *
  * <p>包序列（spawn）：
  * <ol>
  *   <li>{@link ClientboundPlayerInfoUpdatePacket}（ADD_PLAYER）— 添加到 TAB 列表</li>
- *   <li>{@link ClientboundAddEntityPacket} — 生成玩家实体（26.1+ 替代已移除的 ClientboundAddPlayerPacket）</li>
+ *   <li>{@code ClientboundAddEntityPacket}（由 {@link NmsAdapter#createSpawnPacket} 构造）— 生成玩家实体</li>
  *   <li>{@link ClientboundSetEntityDataPacket} — 设置 skin 外层 metadata（DATA_PLAYER_MODE_CUSTOMISATION）</li>
  *   <li>{@link ClientboundPlayerInfoUpdatePacket#updateListed} — 从 TAB 列表隐藏</li>
  *   <li>{@link ClientboundRotateHeadPacket} — 头部朝向与 body yaw 一致</li>
@@ -73,7 +79,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ol></p>
  *
  * <p>移动使用 {@link ClientboundMoveEntityPacket.PosRot}（相对位移），位移过大时
- * 降级为 {@link ClientboundTeleportEntityPacket}（绝对位置，基于 {@link PositionMoveRotation}）。</p>
+ * 降级为绝对位置传送包（由 {@link NmsAdapter#createTeleportPacket} 构造）。</p>
  *
  * @author oolongho
  */
@@ -84,6 +90,59 @@ public class NpcPacketSender {
 
     /** Minecraft 玩家名上限（GameProfile.name 长度限制）。 */
     private static final int MC_NAME_LIMIT = 16;
+
+    /**
+     * {@code ClientboundPlayerInfoUpdatePacket.Entry} 构造器参数数（运行期反射探测）。
+     *
+     * <p>跨版本兼容：1.21.x 的 Entry record 构造器签名有 3 种变体，编译期 dev bundle
+     * (1.21.11) 仅可见 9 参数版本，故 7/8 参数变体必须经反射调用。</p>
+     * <ul>
+     *   <li>1.21.0/1/2：7 参数（无 showHat、无 listOrder）—— {@code (UUID, GameProfile,
+     *       boolean listed, int latency, GameType, Component, RemoteChatSession.Data)}</li>
+     *   <li>1.21.3：8 参数（新增 listOrder，位于 chatSession 之前）—— 上述 + {@code int listOrder}</li>
+     *   <li>1.21.4+：9 参数（新增 showHat，位于 listOrder 之前）—— 上述 + {@code boolean showHat}</li>
+     * </ul>
+     *
+     * <p>1.21.2 在 mappings.dev 无独立页面，但 Action enum 历史显示 {@code UPDATE_LIST_ORDER}
+     * 在 1.21.3 才加入，故 1.21.2 极可能仍是 7 参数。本字段运行期探测，无需硬编码版本边界。</p>
+     */
+    private static final int ENTRY_PARAM_COUNT = detectEntryParamCount();
+
+    /**
+     * 7/8 参数 Entry 构造器的反射缓存（用于 1.21.0~1.21.3）。
+     *
+     * <p>9 参数（1.21.4+）走 fast-path 直接 {@code new}，无需此字段（{@code null}）。
+     * 反射 Constructor 在首次使用后由 JIT 优化，与直接 {@code new} 差距约 20~50ns/spawn，
+     * NPC spawn 频率（10~100/s）下可忽略。</p>
+     */
+    private static final Constructor<?> ENTRY_REFLECT_CONSTRUCTOR = ENTRY_PARAM_COUNT == 9
+            ? null
+            : resolveEntryConstructor(ENTRY_PARAM_COUNT);
+
+    private static int detectEntryParamCount() {
+        int maxParams = 0;
+        for (Constructor<?> c : ClientboundPlayerInfoUpdatePacket.Entry.class.getConstructors()) {
+            // 跳过 (ServerPlayer) 单参数构造器，取参数数最多的 public 构造器
+            if (c.getParameterCount() > maxParams) {
+                maxParams = c.getParameterCount();
+            }
+        }
+        if (maxParams < 7) {
+            throw new IllegalStateException(
+                    "ClientboundPlayerInfoUpdatePacket.Entry: no suitable constructor (max params=" + maxParams + ")");
+        }
+        return maxParams;
+    }
+
+    private static Constructor<?> resolveEntryConstructor(int paramCount) {
+        for (Constructor<?> c : ClientboundPlayerInfoUpdatePacket.Entry.class.getConstructors()) {
+            if (c.getParameterCount() == paramCount) {
+                return c;
+            }
+        }
+        throw new IllegalStateException(
+                "ClientboundPlayerInfoUpdatePacket.Entry: no constructor with " + paramCount + " params");
+    }
 
     /** 每个 NPC 上次发送给各客户端的位置（entityId → playerUuid → location），用于计算相对位移。 */
     private final Map<Integer, Map<UUID, Location>> lastSentByNpc = new ConcurrentHashMap<>();
@@ -99,6 +158,9 @@ public class NpcPacketSender {
 
     /** 消息管理器，用于查询性格前缀（MiniMessage 字符串）。 */
     private final Messages messages;
+
+    /** NMS 适配器，隔离 spawn/teleport 包构造的跨版本差异（1.21.0/1 vs 1.21.2+ 及 26.1+）。 */
+    private final NmsAdapter nmsAdapter;
 
     /** MiniMessage 解析器（前缀 → Component）。 */
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
@@ -118,7 +180,14 @@ public class NpcPacketSender {
     public NpcPacketSender(ConfigLoader configLoader, Messages messages) {
         this.configLoader = configLoader;
         this.messages = messages;
-        this.playerModeCustomisationId = resolveEntityDataId(Avatar.DATA_PLAYER_MODE_CUSTOMISATION);
+        this.nmsAdapter = NmsAdapterFactory.getInstance();
+        // 26.1+：Avatar.DATA_PLAYER_MODE_CUSTOMISATION；1.21.x：player.Player.DATA_PLAYER_MODE_CUSTOMISATION
+        // 编译期统一用 1.21.x dev bundle，Avatar 类不存在于符号表，故通过反射按类名查找避免硬引用。
+        // 依次尝试 Avatar → Player，命中第一个即返回；全部失败返回 -1 降级为无 skin 外层 metadata。
+        this.playerModeCustomisationId = resolveEntityDataIdByClassNames(
+                "net.minecraft.world.entity.Avatar",
+                "net.minecraft.world.entity.player.Player",
+                "DATA_PLAYER_MODE_CUSTOMISATION");
         this.customNameId = resolveEntityDataIdByName(net.minecraft.world.entity.Entity.class, "DATA_CUSTOM_NAME");
         this.customNameVisibleId = resolveEntityDataIdByName(net.minecraft.world.entity.Entity.class, "DATA_CUSTOM_NAME_VISIBLE");
     }
@@ -137,13 +206,15 @@ public class NpcPacketSender {
         // 1. 添加到 TAB 列表（携带性格前缀显示名，TAB 列表隐藏不影响显示名透传）
         sendPacket(player, createInfoAddPacket(profile, displayName));
 
-        // 2. 生成玩家实体（26.1+ 使用 ClientboundAddEntityPacket）
-        sendPacket(player, new ClientboundAddEntityPacket(
+        // 2. 生成玩家实体（spawn 包构造委托给 NmsAdapter，跨版本签名差异隔离）
+        //    headYaw 传 0.0：与原实现一致，由后续 ClientboundRotateHeadPacket 单独修正，
+        //    避免在此处设置后又被 spawn 内的头部旋转包覆盖（spawn 时 lastHeadYaws 未更新）
+        sendPacket(player, nmsAdapter.createSpawnPacket(
                 npc.entityId(), npc.uuid(),
                 loc.getX(), loc.getY(), loc.getZ(),
                 loc.getPitch(), loc.getYaw(),
                 EntityType.PLAYER, 0,
-                Vec3.ZERO, 0.0));
+                Vec3.ZERO, 0.0f));
 
         // 3. 设置 skin 外层 metadata（反射失败时跳过，降级为无外层，NPC 仍可正常工作）
         if (playerModeCustomisationId >= 0) {
@@ -346,22 +417,64 @@ public class NpcPacketSender {
     }
 
     private ClientboundPlayerInfoUpdatePacket createInfoAddPacket(GameProfile profile, Component displayName) {
-        ClientboundPlayerInfoUpdatePacket.Entry entry = new ClientboundPlayerInfoUpdatePacket.Entry(
-                profile.id(), profile, false, 0, GameType.SURVIVAL,
-                PaperAdventure.asVanilla(displayName), false, 0, null);
+        ClientboundPlayerInfoUpdatePacket.Entry entry =
+                createInfoEntry(profile, PaperAdventure.asVanilla(displayName));
         return new ClientboundPlayerInfoUpdatePacket(
                 EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER),
                 List.of(entry));
     }
 
-    private ClientboundTeleportEntityPacket createTeleportPacket(SimNpc npc) {
+    /**
+     * 构造 {@code ClientboundPlayerInfoUpdatePacket.Entry}，跨版本兼容 1.21.x 三种构造器变体。
+     *
+     * <p>1.21.4+（9 参数）走 fast-path 直接 {@code new}；1.21.0~1.21.3（7/8 参数）经缓存的
+     * 反射 Constructor 调用。参数顺序与各版本 record 字段顺序一致（见 {@link #ENTRY_PARAM_COUNT}
+     * 的版本对照表）。NPC 静态：listed=false、latency=0、gameMode=SURVIVAL、chatSession=null、
+     * showHat=false、listOrder=0。</p>
+     *
+     * @param profile     NPC GameProfile（含 skin textures）
+     * @param displayName NMS 显示名 Component
+     * @return Entry 实例
+     */
+    private static ClientboundPlayerInfoUpdatePacket.Entry createInfoEntry(
+            GameProfile profile, net.minecraft.network.chat.Component displayName) {
+        if (ENTRY_PARAM_COUNT == 9) {
+            // 1.21.4+ fast-path：编译期 1.21.11 dev bundle 直接匹配，类型安全
+            return new ClientboundPlayerInfoUpdatePacket.Entry(
+                    profile.id(), profile, false, 0, GameType.SURVIVAL,
+                    displayName, false, 0, null);
+        }
+        // 1.21.0~1.21.3：反射调用（编译期无 7/8 参数符号）
+        Object[] args = switch (ENTRY_PARAM_COUNT) {
+            case 8 -> new Object[]{  // 1.21.3：listOrder 在 chatSession 之前
+                    profile.id(), profile, false, 0, GameType.SURVIVAL, displayName, 0, null};
+            case 7 -> new Object[]{  // 1.21.0/1/2：无 listOrder、无 showHat
+                    profile.id(), profile, false, 0, GameType.SURVIVAL, displayName, null};
+            default -> throw new IllegalStateException(
+                    "Unexpected Entry constructor param count: " + ENTRY_PARAM_COUNT);
+        };
+        try {
+            return (ClientboundPlayerInfoUpdatePacket.Entry) ENTRY_REFLECT_CONSTRUCTOR.newInstance(args);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 构造绝对位置传送包。委托给 {@link NmsAdapter}，由其按运行时服务端版本选择
+     * {@code PositionMoveRotation}（1.21.2+ 及 26.1+）或 {@code FriendlyByteBuf} +
+     * {@code STREAM_CODEC.decode}（1.21.0/1）构造方式。
+     *
+     * @param npc NPC
+     * @return 传送包
+     */
+    private Packet<?> createTeleportPacket(SimNpc npc) {
         Location loc = npc.location();
-        PositionMoveRotation pmr = new PositionMoveRotation(
-                new Vec3(loc.getX(), loc.getY(), loc.getZ()),
-                Vec3.ZERO,
-                loc.getYaw(),
-                loc.getPitch());
-        return new ClientboundTeleportEntityPacket(npc.entityId(), pmr, Set.of(), false);
+        return nmsAdapter.createTeleportPacket(
+                npc.entityId(),
+                loc.getX(), loc.getY(), loc.getZ(),
+                loc.getYaw(), loc.getPitch(),
+                Set.of(), false);
     }
 
     /**
@@ -545,6 +658,59 @@ public class NpcPacketSender {
         } catch (ReflectiveOperationException e) {
             return -1;
         }
+    }
+
+    /**
+     * 反射读取指定类的静态 {@link EntityDataAccessor} 字段并解析其内部 id（按类名查找）。
+     *
+     * <p>用于编译期不存在于符号表、运行期才加载的类（如 26.1+ 的
+     * {@code net.minecraft.world.entity.Avatar}，在 1.21.x dev bundle 编译时不可直接引用）。
+     * 通过 {@link Class#forName} 运行期加载，避免编译期硬依赖。失败返回 -1（降级）。</p>
+     *
+     * @param className accessor 字段所在类的全限定名
+     * @param fieldName  accessor 字段名
+     * @return entity data id；类未找到或反射失败返回 -1
+     */
+    private static int resolveEntityDataIdByClassName(String className, String fieldName) {
+        try {
+            Class<?> holderClass = Class.forName(className);
+            return resolveEntityDataIdByName(holderClass, fieldName);
+        } catch (ClassNotFoundException e) {
+            return -1;
+        }
+    }
+
+    /**
+     * 反射读取多个候选类的静态 {@link EntityDataAccessor} 字段，返回第一个命中的 id。
+     *
+     * <p>用于跨版本兼容：26.1+ 字段位于 {@code Avatar}，1.21.x 字段位于
+     * {@code player.Player}，运行期按类名依次尝试，命中即返回。
+     * 全部失败返回 -1（降级）。</p>
+     *
+     * @param classNames 候选类全限定名数组（按优先级排序）
+     * @param fieldName  accessor 字段名（在所有候选类中一致）
+     * @return 第一个命中类的 entity data id；全部失败返回 -1
+     */
+    private static int resolveEntityDataIdByClassNames(String[] classNames, String fieldName) {
+        for (String className : classNames) {
+            int id = resolveEntityDataIdByClassName(className, fieldName);
+            if (id >= 0) {
+                return id;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 两参数便捷重载：等价于 {@code resolveEntityDataIdByClassNames(new String[]{first, second}, fieldName)}。
+     *
+     * @param first    第一候选类全限定名
+     * @param second   第二候选类全限定名
+     * @param fieldName accessor 字段名
+     * @return 第一个命中类的 entity data id；全部失败返回 -1
+     */
+    private static int resolveEntityDataIdByClassNames(String first, String second, String fieldName) {
+        return resolveEntityDataIdByClassNames(new String[]{first, second}, fieldName);
     }
 
     /**

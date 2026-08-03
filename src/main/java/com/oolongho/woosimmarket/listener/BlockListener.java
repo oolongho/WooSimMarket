@@ -19,14 +19,19 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockBurnEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * 方块事件监听器。
  *
  * <p>处理收银机/货架的放置（创建商店/绑定货架）、破坏（清除记录）、右键交互（打开 GUI）。
- * 放置校验失败时取消事件（阻止放置）；破坏允许但清除关联记录。</p>
+ * 放置校验失败时取消事件（阻止放置）；破坏允许但清除关联记录。
+ * 爆炸/火焰保护：从爆炸方块列表移除收银机/货架、取消火焰燃烧，避免库存/余额丢失。</p>
  *
  * <p>所有事件在主线程执行，无需额外同步。</p>
  *
@@ -72,6 +77,8 @@ public class BlockListener implements Listener {
 
     /**
      * 破坏方块：清除商店/货架记录。
+     *
+     * <p>收银机仅店长可破坏，破坏时自动提现余额；货架破坏前掉落全部库存，避免物品静默丢失。</p>
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
@@ -85,6 +92,27 @@ public class BlockListener implements Listener {
         if (craftEngine.isCashRegister(block)) {
             Shop shop = shopManager.getShopAt(world, x, y, z);
             if (shop != null) {
+                // 仅店长可破坏收银机
+                Player player = event.getPlayer();
+                if (!player.getUniqueId().equals(shop.ownerUuid())) {
+                    event.setCancelled(true);
+                    messages.send(player, "shop-not-owner");
+                    return;
+                }
+
+                // 自动提现：将商店余额全额转入店长 Vault 账户
+                // 失败时取消破坏并提示，避免余额随商店删除而丢失
+                if (shop.balance() > 0) {
+                    double amount = shop.balance();
+                    if (!plugin.getEconomyManager().deposit(player, amount)) {
+                        event.setCancelled(true);
+                        messages.send(player, "withdraw-failed");
+                        return;
+                    }
+                    messages.send(player, "shop-auto-withdraw", "amount",
+                            plugin.getEconomyManager().format(amount));
+                }
+
                 // 必须在 removeShop 之前移除展示：removeShop 会清空关联货架索引，
                 // 之后再调用 removeShelvesByShop 将查不到货架
                 shopDisplayManager.removeDisplayByShop(shop.id());
@@ -95,10 +123,54 @@ public class BlockListener implements Listener {
         } else if (craftEngine.isShelf(block)) {
             Shelf shelf = shopManager.getShelfAt(world, x, y, z);
             if (shelf != null) {
+                // 破坏前掉落货架内全部物品（含绑定模板），避免物品静默丢失
+                if (shelf.stock() > 0 && shelf.itemStack() != null) {
+                    ItemStack template = shelf.itemStack().clone();
+                    int remaining = shelf.stock();
+                    int maxStack = template.getMaxStackSize();
+                    while (remaining > 0) {
+                        int amt = Math.min(remaining, maxStack);
+                        ItemStack drop = template.clone();
+                        drop.setAmount(amt);
+                        block.getWorld().dropItemNaturally(block.getLocation(), drop);
+                        remaining -= amt;
+                    }
+                }
                 shopManager.removeShelf(shelf.id());
                 shelfDisplayManager.removeDisplay(shelf.id());
             }
         }
+    }
+
+    /**
+     * 实体爆炸保护：从爆炸方块列表移除收银机/货架，防止物品/余额丢失。
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onEntityExplode(EntityExplodeEvent event) {
+        event.blockList().removeIf(this::isProtectedBlock);
+    }
+
+    /**
+     * 方块爆炸保护（床/重生锚等）：从爆炸方块列表移除收银机/货架。
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onBlockExplode(BlockExplodeEvent event) {
+        event.blockList().removeIf(this::isProtectedBlock);
+    }
+
+    /**
+     * 火焰燃烧保护：取消收银机/货架的燃烧，防止数据丢失。
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onBlockBurn(BlockBurnEvent event) {
+        if (isProtectedBlock(event.getBlock())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** 判断方块是否为受保护的收银机/货架。 */
+    private boolean isProtectedBlock(Block block) {
+        return craftEngine.isCashRegister(block) || craftEngine.isShelf(block);
     }
 
     /**

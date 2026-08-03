@@ -23,23 +23,23 @@ import java.util.List;
 public class ShelfDao {
 
     private static final String SQL_INSERT = """
-            INSERT INTO shelves (id, shop_id, world, x, y, z, facing, item_stack, price, stock, max_stock, enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+            INSERT INTO shelves (id, shop_id, world, x, y, z, facing, item_stack, price, stock, max_stock, enabled, item_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
     private static final String SQL_UPDATE = """
             UPDATE shelves
-            SET shop_id=?, world=?, x=?, y=?, z=?, facing=?, item_stack=?, price=?, stock=?, max_stock=?, enabled=?
+            SET shop_id=?, world=?, x=?, y=?, z=?, facing=?, item_stack=?, price=?, stock=?, max_stock=?, enabled=?, item_id=?
             WHERE id=?""";
 
     private static final String SQL_DELETE = "DELETE FROM shelves WHERE id=?";
     private static final String SQL_DELETE_BY_SHOP = "DELETE FROM shelves WHERE shop_id=?";
 
     private static final String SQL_FIND_BY_SHOP = """
-            SELECT id, shop_id, world, x, y, z, facing, item_stack, price, stock, max_stock, enabled
+            SELECT id, shop_id, world, x, y, z, facing, item_stack, price, stock, max_stock, enabled, item_id
             FROM shelves WHERE shop_id=?""";
 
     private static final String SQL_LOAD_ALL = """
-            SELECT id, shop_id, world, x, y, z, facing, item_stack, price, stock, max_stock, enabled
+            SELECT id, shop_id, world, x, y, z, facing, item_stack, price, stock, max_stock, enabled, item_id
             FROM shelves""";
 
     private final DatabaseManager db;
@@ -188,6 +188,7 @@ public class ShelfDao {
         ps.setInt(10, r.stock());
         ps.setInt(11, r.maxStock());
         ps.setBoolean(12, r.enabled());
+        ps.setString(13, r.itemId());
     }
 
     private static void bindUpdate(PreparedStatement ps, ShelfRecord r) throws SQLException {
@@ -202,7 +203,8 @@ public class ShelfDao {
         ps.setInt(9, r.stock());
         ps.setInt(10, r.maxStock());
         ps.setBoolean(11, r.enabled());
-        ps.setString(12, r.id());
+        ps.setString(12, r.itemId());
+        ps.setString(13, r.id());
     }
 
     private static ShelfRecord map(ResultSet rs) throws SQLException {
@@ -218,7 +220,8 @@ public class ShelfDao {
                 rs.getDouble("price"),
                 rs.getInt("stock"),
                 rs.getInt("max_stock"),
-                rs.getBoolean("enabled")
+                rs.getBoolean("enabled"),
+                rs.getString("item_id")
         );
     }
 

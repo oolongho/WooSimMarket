@@ -5,6 +5,7 @@ import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -173,6 +174,10 @@ public class ShopDisplayManager {
      * <p>仅在展示已存在且实体在线时更新；展示不存在或区块未加载时静默跳过
      * （下次 {@link #onChunkLoad} 或 {@link #refreshShop} 会用新名字重建）。</p>
      *
+     * <p>线程模型：本方法可由任意线程调用（如 ChatListener 通过玩家 scheduler 调度）。
+     * 内部通过 {@link SchedulerUtil#runTaskAt} 将 TextDisplay 实体操作路由到 shop 所在
+     * 区域线程，避免玩家与 shop 跨区域时实体操作跨区域。</p>
+     *
      * @param shop 商店（读取 shop.name 作为新文本）
      */
     public void updateShopName(Shop shop) {
@@ -180,15 +185,24 @@ public class ShopDisplayManager {
         if (handle == null) {
             return;
         }
-        try {
-            Entity entity = Bukkit.getEntity(handle.textDisplayUuid());
-            if (entity instanceof TextDisplay textDisplay && entity.isValid()) {
-                textDisplay.text(buildShopNameComponent(shop));
-            }
-        } catch (Exception e) {
-            plugin.getLogger().warning(() ->
-                    "更新店名展示失败 shopId=" + shop.id() + "：" + e.getMessage());
+        World world = Bukkit.getWorld(shop.world());
+        if (world == null) {
+            return;
         }
+        Location shopLoc = new Location(world, shop.x() + 0.5, shop.y(), shop.z() + 0.5);
+        // 调度到 shop 所在区域线程：TextDisplay.text() 修改实体 metadata，
+        // Folia 上必须在实体所属区域线程执行
+        SchedulerUtil.runTaskAt(shopLoc, () -> {
+            try {
+                Entity entity = Bukkit.getEntity(handle.textDisplayUuid());
+                if (entity instanceof TextDisplay textDisplay && entity.isValid()) {
+                    textDisplay.text(buildShopNameComponent(shop));
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning(() ->
+                        "更新店名展示失败 shopId=" + shop.id() + "：" + e.getMessage());
+            }
+        });
     }
 
     /**

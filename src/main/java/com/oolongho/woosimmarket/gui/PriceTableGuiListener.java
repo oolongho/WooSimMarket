@@ -5,7 +5,7 @@ import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.model.Shop;
-import org.bukkit.Bukkit;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -110,7 +110,7 @@ public class PriceTableGuiListener implements Listener {
      */
     private void handleBackClick(PriceTableGui gui, Player player) {
         Shelf sourceShelf = gui.getSourceShelf();
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        SchedulerUtil.runTask(() -> {
             player.closeInventory();
             if (sourceShelf != null) {
                 // 从货架入口进入：返回 ShelfGui

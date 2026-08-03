@@ -8,7 +8,7 @@ import com.oolongho.woosimmarket.market.PurchaseFormula;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.ShopManager;
-import com.oolongho.woosimmarket.util.TaskUtil;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import com.oolongho.woosimmarket.visualize.ThoughtDisplayManager;
 import com.oolongho.woosimmarket.visualize.ThoughtDisplayManager.Phase;
@@ -18,11 +18,11 @@ import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -63,12 +63,17 @@ public class NpcManager {
     private final PersonalityManager personalityManager;
 
     private final Map<UUID, SimNpc> npcsById = new ConcurrentHashMap<>();
-    private final Map<String, List<UUID>> npcsByShop = new ConcurrentHashMap<>();
+    /**
+     * shopId → 该商店下 NPC UUID 集合。
+     * <p>使用 {@link ConcurrentHashMap#newKeySet()} 创建线程安全 Set，因 add（trySpawnNpc，
+     * 全局区域线程）与 remove（removeFromShopIndex，NPC 所在区域线程）可能跨区域线程并发。</p>
+     */
+    private final Map<String, Set<UUID>> npcsByShop = new ConcurrentHashMap<>();
 
-    private BukkitTask tickTask;
-    private BukkitTask spawnTask;
+    private SchedulerUtil.TaskHandle tickTask;
+    private SchedulerUtil.TaskHandle spawnTask;
     /** 待生成的分布式延迟任务列表（每次 scheduleSpawn 排出，stop/reschedule 时一并取消）。 */
-    private final List<BukkitTask> pendingSpawnTasks = new ArrayList<>();
+    private final List<SchedulerUtil.TaskHandle> pendingSpawnTasks = new ArrayList<>();
 
     public NpcManager(WooSimMarket plugin, ShopManager shopManager,
                       NpcPacketSender packetSender, ConfigLoader configLoader,
@@ -95,7 +100,7 @@ public class NpcManager {
      */
     public void start() {
         // 每 tick 更新所有 NPC 位置
-        tickTask = TaskUtil.runAtFixed(plugin, this::tick, 0L, 1L);
+        tickTask = SchedulerUtil.runAtFixedRate(this::tick, 0L, 1L);
 
         // 定时生成 NPC
         scheduleNextSpawn();
@@ -114,7 +119,7 @@ public class NpcManager {
             spawnTask = null;
         }
         // 取消所有待生成的延迟任务，避免 stop 后仍触发 spawn
-        for (BukkitTask task : pendingSpawnTasks) {
+        for (SchedulerUtil.TaskHandle task : pendingSpawnTasks) {
             task.cancel();
         }
         pendingSpawnTasks.clear();
@@ -129,6 +134,13 @@ public class NpcManager {
 
     /**
      * 每 tick 更新所有 NPC 的位置并发包。
+     *
+     * <p>Folia 线程模型：tick 任务在全局区域线程执行（仅遍历快照），对每个 NPC
+     * 通过 {@link SchedulerUtil#runTaskAt} 提交到 NPC 所在区域线程执行
+     * {@link #tickNpc}。tickNpc 内的实体操作（ThoughtDisplay spawn/despawn/flash、
+     * ShelfDisplay refreshShelf）与发包均在 NPC 所属区域线程，符合 Folia 区域隔离约束。</p>
+     *
+     * <p>Paper 路径：runTaskAt 退化为 Bukkit 主线程执行，等价于原同步循环。</p>
      */
     private void tick() {
         if (npcsById.isEmpty()) {
@@ -136,27 +148,47 @@ public class NpcManager {
         }
 
         for (SimNpc npc : new ArrayList<>(npcsById.values())) {
-            SimNpc.TickResult result = npc.tick();
-
-            switch (result) {
-                case MOVING -> packetSender.moveToNearby(npc, BROADCAST_RADIUS);
-                case REACHED -> {
-                    // SWITCHING 状态返回 REACHED 表示换架到达，走专门的恢复流程；
-                    // 其他状态（MOVING）返回 REACHED 表示初到货架，走 handleReached。
-                    if (npc.state() == SimNpc.State.SWITCHING) {
-                        handleSwitchArrival(npc);
-                    } else {
-                        handleReached(npc);
-                    }
-                }
-                case ROLL_DUE -> handleRoll(npc);
-                case STUCK -> {
-                    plugin.getLogger().info(() -> "NPC " + npc.name() + " 卡住，销毁");
-                    despawnNpc(npc);
-                }
-                case DESPAWN -> despawnNpc(npc);
-                case IDLE -> { /* 空闲状态不处理 */ }
+            Location loc = npc.location();
+            if (loc.getWorld() == null) {
+                // 世界未加载，跳过本 tick（NPC 仍保留在索引，待世界加载后恢复）
+                continue;
             }
+            SchedulerUtil.runTaskAt(loc, () -> tickNpc(npc));
+        }
+    }
+
+    /**
+     * 单个 NPC 的 tick 处理（在 NPC 所在区域线程执行）。
+     *
+     * <p>包含 SimNpc.tick 纯计算 + 发包 + 实体操作（ThoughtDisplay/ShelfDisplay）。
+     * 防御：调度期间 NPC 可能已被 despawn（stop/STUCK/DESPAWN），需二次校验存在性。</p>
+     *
+     * @param npc 待处理的 NPC
+     */
+    private void tickNpc(SimNpc npc) {
+        if (!npcsById.containsKey(npc.uuid())) {
+            return;
+        }
+        SimNpc.TickResult result = npc.tick();
+
+        switch (result) {
+            case MOVING -> packetSender.moveToNearby(npc, BROADCAST_RADIUS);
+            case REACHED -> {
+                // SWITCHING 状态返回 REACHED 表示换架到达，走专门的恢复流程；
+                // 其他状态（MOVING）返回 REACHED 表示初到货架，走 handleReached。
+                if (npc.state() == SimNpc.State.SWITCHING) {
+                    handleSwitchArrival(npc);
+                } else {
+                    handleReached(npc);
+                }
+            }
+            case ROLL_DUE -> handleRoll(npc);
+            case STUCK -> {
+                plugin.getLogger().info(() -> "NPC " + npc.name() + " 卡住，销毁");
+                despawnNpc(npc);
+            }
+            case DESPAWN -> despawnNpc(npc);
+            case IDLE -> { /* 空闲状态不处理 */ }
         }
     }
 
@@ -397,7 +429,12 @@ public class NpcManager {
         shopManager.saveShelf(shelf);
 
         // 刷新货架展示（基于最新库存数据）
-        shelfDisplayManager.refreshShelf(shelf);
+        // 调度到 shelf 所在区域线程：ItemDisplay 实体的 remove/spawn 操作不可跨区域（Folia）
+        World shelfWorld = Bukkit.getWorld(shelf.world());
+        if (shelfWorld != null) {
+            Location shelfLoc = new Location(shelfWorld, shelf.x() + 0.5, shelf.y(), shelf.z() + 0.5);
+            SchedulerUtil.runTaskAt(shelfLoc, () -> shelfDisplayManager.refreshShelf(shelf));
+        }
 
         // 广播购买消息（受商店 notifyEnabled 开关控制）
         if (shop != null && shop.notifyEnabled()) {
@@ -453,7 +490,7 @@ public class NpcManager {
             }
             for (int i = 0; i < toSpawn; i++) {
                 long delayTicks = ThreadLocalRandom.current().nextLong(0, windowTicks + 1);
-                BukkitTask task = TaskUtil.runLater(plugin, () -> {
+                SchedulerUtil.TaskHandle task = SchedulerUtil.runTaskLater(() -> {
                     // 防御：调度期间可能已 stop 或 targetCount 已变化
                     if (countNpcsByShop(shop.id()) >= targetCount) {
                         return;
@@ -521,7 +558,7 @@ public class NpcManager {
 
         // 先注册到内存索引（tick() 处理 WAITING_FOR_PATH 返回 IDLE，不移动不发包）
         npcsById.put(npc.uuid(), npc);
-        npcsByShop.computeIfAbsent(shop.id(), k -> new ArrayList<>()).add(npc.uuid());
+        npcsByShop.computeIfAbsent(shop.id(), k -> ConcurrentHashMap.newKeySet()).add(npc.uuid());
 
         if (configLoader.isDebugGeneral()) {
             plugin.getLogger().info(() -> String.format(
@@ -600,7 +637,7 @@ public class NpcManager {
         int maxSec = configLoader.getNpcSpawnIntervalMax();
         int delaySec = ThreadLocalRandom.current().nextInt(minSec, maxSec + 1);
         long delayTicks = delaySec * 20L;
-        spawnTask = TaskUtil.runLater(plugin, this::scheduleSpawn, delayTicks);
+        spawnTask = SchedulerUtil.runTaskLater(this::scheduleSpawn, delayTicks);
     }
 
     /**
@@ -613,7 +650,7 @@ public class NpcManager {
             spawnTask.cancel();
         }
         // 取消所有待生成的延迟任务，避免 reload 后旧任务仍触发 spawn 导致超量
-        for (BukkitTask task : pendingSpawnTasks) {
+        for (SchedulerUtil.TaskHandle task : pendingSpawnTasks) {
             task.cancel();
         }
         pendingSpawnTasks.clear();
@@ -623,15 +660,15 @@ public class NpcManager {
     // ===== 辅助方法 =====
 
     private int countNpcsByShop(String shopId) {
-        List<UUID> list = npcsByShop.get(shopId);
-        return list == null ? 0 : list.size();
+        Set<UUID> set = npcsByShop.get(shopId);
+        return set == null ? 0 : set.size();
     }
 
     private void removeFromShopIndex(String shopId, UUID npcUuid) {
-        List<UUID> list = npcsByShop.get(shopId);
-        if (list != null) {
-            list.remove(npcUuid);
-            if (list.isEmpty()) {
+        Set<UUID> set = npcsByShop.get(shopId);
+        if (set != null) {
+            set.remove(npcUuid);
+            if (set.isEmpty()) {
                 npcsByShop.remove(shopId);
             }
         }

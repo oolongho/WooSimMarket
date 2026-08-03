@@ -22,12 +22,15 @@ shop-notify-off: "{prefix}<color:#9CA3AF>Purchase notifications disabled.</color
 shop-shelf-all-enabled: "{prefix}<color:#10B981>All shelves enabled.</color>"
 shop-shelf-all-disabled: "{prefix}<color:#EF4444>All shelves disabled.</color>"
 shop-shelf-empty: "{prefix}<color:#F59E0B>Shop has no shelves.</color>"
+shop-not-owner: "<color:#EF4444>Only the shop owner can break the cash register.</color>"
+shop-auto-withdraw: "{prefix}<color:#10B981>Shop balance {amount} has been auto-deposited to your account.</color>"
 
 # Shelf
 shelf-bound: "{prefix}<color:#10B981>Shelf bound to shop. Please open the shelf management UI to enable it.</color>"
 shelf-too-far: "{prefix}<color:#EF4444>Shelf is too far from the cash register to bind.</color>"
 shelf-not-found: "{prefix}<color:#EF4444>Shelf not found.</color>"
 shelf-disabled: "{prefix}<color:#F59E0B>This shelf is disabled.</color>"
+shelf-limit-reached: "<color:#EF4444>Reached enabled shelf limit ({limit}). Disable other shelves first.</color>"
 
 # Range visualization
 range-not-found: "{prefix}<color:#EF4444>No shop found nearby.</color>"

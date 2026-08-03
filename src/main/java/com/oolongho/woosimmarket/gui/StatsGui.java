@@ -5,7 +5,7 @@ import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.database.DatabaseManager.PurchaseLogRecord;
 import com.oolongho.woosimmarket.database.PurchaseLogDao;
 import com.oolongho.woosimmarket.model.Shop;
-import com.oolongho.woosimmarket.util.TaskUtil;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -36,7 +36,7 @@ import java.util.Map;
  * </ul></p>
  *
  * <p>线程模型：构造时先同步填充边框与按钮（玩家立即看到框架），再通过
- * {@link TaskUtil#runAsync} 查询 purchase_log，{@link TaskUtil#run} 回主线程渲染聚合结果。
+ * {@link SchedulerUtil#runTaskAsynchronously} 查询 purchase_log，{@link SchedulerUtil#runTask} 回主线程渲染聚合结果。
  * {@link #refresh()} 复用同一异步→主线程链路，重置内容槽后重新填充。</p>
  *
  * <p>通过 {@link InventoryHolder} 标识 GUI，{@link StatsGuiListener} 据此判断事件归属。</p>
@@ -120,12 +120,12 @@ public class StatsGui implements InventoryHolder {
      * 作为 LIMIT 保护，防止极端数据量。
      */
     private void loadAndRender() {
-        TaskUtil.runAsync(plugin, () -> {
+        SchedulerUtil.runTaskAsynchronously(() -> {
             long sinceMillis = System.currentTimeMillis()
                     - plugin.getConfigLoader().getStatsRetentionDays() * 86400000L;
             List<PurchaseLogRecord> records = dao.findRecentByShopSince(
                     shop.id(), sinceMillis, plugin.getConfigLoader().getStatsQueryLimit());
-            TaskUtil.run(plugin, () -> renderContents(records));
+            SchedulerUtil.runTask(() -> renderContents(records));
         });
     }
 

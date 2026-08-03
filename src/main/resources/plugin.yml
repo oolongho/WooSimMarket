@@ -2,6 +2,7 @@ name: WooSimMarket
 version: '${project.version}'
 main: com.oolongho.woosimmarket.WooSimMarket
 api-version: '1.21'
+folia-supported: true
 author: oolongho
 description: A simulation shop plugin with NPC customers
 
@@ -24,3 +25,8 @@ permissions:
     default: op
   woosimmarket.reload:
     default: op
+  # 货架启用数量限制：玩家可同时启用的货架数
+  # 默认上限由 config.yml 的 shelf.max-enabled-per-player 控制（默认 8）
+  # 服主可给玩家加 woosimmarket.shelf.num.N 权限（N 为数字）覆盖默认上限
+  # 取玩家持有的所有此类权限中最大的 N 作为该玩家上限
+  # 注意：N 必须大于 config 默认值才会生效（取 max）

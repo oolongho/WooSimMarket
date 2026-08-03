@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  * 单连接 + {@link ReentrantLock} 保护并发：所有 DAO 操作必须在 {@link #getLock()} 内执行，
  * 避免 SQLite 单连接被多线程同时写入导致的锁竞争与 "database is locked" 异常。</p>
  *
- * <p>线程模型：DAO 方法同步执行（业务上层应通过 {@code TaskUtil} 将数据库 IO 投递到异步线程，
+ * <p>线程模型：DAO 方法同步执行（业务上层应通过 {@code SchedulerUtil} 将数据库 IO 投递到异步线程，
  * 本层不内置异步调度，保持单一职责）。</p>
  *
  * @author oolongho
@@ -51,7 +51,8 @@ public class DatabaseManager {
      * Shelf 表的不可变数据载体（DAO 入参/出参）。
      *
      * <p>itemStackBase64 为 {@link com.oolongho.woosimmarket.util.SerializationUtils#serializeItemStack}
-     * 的产物，空货架时为 null；enabled 用 0/1 存储于 SQLite。</p>
+     * 的产物，空货架时为 null；enabled 用 0/1 存储于 SQLite；itemId 为物品维度标识
+     * （原版 {@code Material.name()} 或 CE 物品 {@code namespace:path}），未绑定时为 null。</p>
      */
     public record ShelfRecord(
             String id,
@@ -63,7 +64,8 @@ public class DatabaseManager {
             double price,
             int stock,
             int maxStock,
-            boolean enabled
+            boolean enabled,
+            String itemId
     ) {
     }
 
@@ -126,8 +128,12 @@ public class DatabaseManager {
                 stock INTEGER NOT NULL DEFAULT 0,
                 max_stock INTEGER NOT NULL DEFAULT 0,
                 enabled INTEGER NOT NULL DEFAULT 1,
+                item_id TEXT,
                 FOREIGN KEY (shop_id) REFERENCES shops(id) ON DELETE CASCADE
             )""";
+
+    /** 旧库迁移：若 shelves 表缺少 item_id 列则添加（允许 null，未绑定货架的 itemId 为 null）。 */
+    private static final String SQL_MIGRATE_SHELVES_ITEM_ID = "ALTER TABLE shelves ADD COLUMN item_id TEXT";
 
     private static final String SQL_CREATE_SHELVES_INDEX =
             "CREATE INDEX IF NOT EXISTS idx_shelves_shop_id ON shelves(shop_id)";
@@ -208,6 +214,8 @@ public class DatabaseManager {
 
             // 旧库迁移：若 shops 表缺少 notify_enabled 列则添加
             migrateShopsNotifyEnabled();
+            // 旧库迁移：若 shelves 表缺少 item_id 列则添加
+            migrateShelvesItemId();
         } finally {
             lock.unlock();
         }
@@ -230,6 +238,26 @@ public class DatabaseManager {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(SQL_MIGRATE_SHOPS_NOTIFY);
             plugin.getLogger().info("已迁移 shops 表：新增 notify_enabled 列（默认 1=开启）");
+        }
+    }
+
+    /**
+     * 旧库迁移：通过 PRAGMA table_info 检查 shelves 表是否已有 item_id 列，
+     * 缺失则执行 ALTER TABLE ADD COLUMN（允许 null，未绑定货架的 itemId 为 null）。
+     * 重复执行是安全的：列已存在时跳过。
+     */
+    private void migrateShelvesItemId() throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement("PRAGMA table_info(shelves)");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                if ("item_id".equalsIgnoreCase(rs.getString("name"))) {
+                    return; // 列已存在，无需迁移
+                }
+            }
+        }
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(SQL_MIGRATE_SHELVES_ITEM_ID);
+            plugin.getLogger().info("已迁移 shelves 表：新增 item_id 列（允许 null）");
         }
     }
 

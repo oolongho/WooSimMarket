@@ -5,7 +5,7 @@ import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.shop.ShopManager;
-import org.bukkit.Bukkit;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -111,7 +111,7 @@ public class ShopGuiListener implements Listener {
      */
     private void handleInfoClick(ShopGui gui, Player player) {
         Shop shop = gui.getShop();
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        SchedulerUtil.runTask(() -> {
             player.closeInventory();
             plugin.getShopNamingManager().startNaming(player, shop);
         });
@@ -162,7 +162,7 @@ public class ShopGuiListener implements Listener {
      * 标准价表按钮：打开标准价表面板。
      */
     private void handlePriceTableClick(ShopGui gui, Player player) {
-        new PriceTableGui(gui.getShop(), economyManager, plugin.getMarketManager(), messages, plugin.getConfigLoader()).open(player);
+        new PriceTableGui(gui.getShop(), economyManager, plugin.getMarketManager(), messages, plugin.getConfigLoader(), plugin.getCraftEngineHook()).open(player);
     }
 
     /**

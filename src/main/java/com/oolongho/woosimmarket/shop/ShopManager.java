@@ -8,6 +8,8 @@ import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.model.Shelf;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.entity.Player;
+import org.bukkit.permissions.PermissionAttachmentInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -214,7 +216,7 @@ public class ShopManager {
     public Shelf bindShelf(String shopId, String world, int x, int y, int z, String facing) {
         String id = UUID.randomUUID().toString();
         Shelf shelf = new Shelf(id, shopId, world, x, y, z, facing,
-                null, 0, 0, Shelf.DEFAULT_MAX_STOCK, false);
+                null, 0, 0, Shelf.DEFAULT_MAX_STOCK, false, null);
         if (!shelfDao.insert(shelf.toRecord())) {
             return null;
         }
@@ -322,6 +324,44 @@ public class ShopManager {
             }
         }
         return count;
+    }
+
+    /**
+     * 统计指定玩家已启用的货架数（用于启用数量限制校验）。
+     *
+     * @param ownerUuid 玩家 UUID
+     * @return 该玩家所有 shop 下 enabled=true 的货架数
+     */
+    public int countEnabledShelvesByOwner(UUID ownerUuid) {
+        int count = 0;
+        for (Shop shop : getAllShops()) {
+            if (!shop.ownerUuid().equals(ownerUuid)) continue;
+            for (Shelf shelf : getShelvesByShop(shop.id())) {
+                if (shelf.enabled()) count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 获取玩家的货架启用上限：max(配置默认值, 玩家持有的 woosimmarket.shelf.num.N 权限中最大 N)。
+     *
+     * @param player 玩家
+     * @return 该玩家的货架启用上限
+     */
+    public int getShelfLimitForPlayer(Player player) {
+        int limit = plugin.getConfigLoader().getShelfMaxEnabledPerPlayer();
+        for (PermissionAttachmentInfo info : player.getEffectivePermissions()) {
+            String perm = info.getPermission();
+            if (perm.startsWith("woosimmarket.shelf.num.")) {
+                try {
+                    int n = Integer.parseInt(perm.substring("woosimmarket.shelf.num.".length()));
+                    if (n > limit) limit = n;
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return limit;
     }
 
     /**

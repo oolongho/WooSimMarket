@@ -3,8 +3,8 @@ package com.oolongho.woosimmarket.npc;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.oolongho.woosimmarket.WooSimMarket;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import com.oolongho.woosimmarket.util.SkinFetcher;
-import com.oolongho.woosimmarket.util.TaskUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,7 +20,7 @@ import java.util.logging.Level;
  * NPC 皮肤缓存 —— playerName → {@link SimNpc.SkinData} 映射 + 磁盘持久化。
  *
  * <p>线程模型：内存 Map 使用 {@link ConcurrentHashMap}，主线程读（{@link #getSkin}）
- * 无锁；异步线程写（{@link #preloadAsync} 通过 {@link TaskUtil#runAsync} 调度）
+ * 无锁；异步线程写（{@link #preloadAsync} 通过 {@link SchedulerUtil#runTaskAsynchronously} 调度）
  * 通过 ConcurrentHashMap 保证可见性。</p>
  *
  * <p>持久化：缓存文件位于插件数据目录的 {@code data/} 子文件夹（默认 {@code data/skins.json}），使用 Gson
@@ -93,7 +93,7 @@ public class NpcSkinCache {
      * @param names 需要预加载的玩家名列表
      */
     public void preloadAsync(List<String> names) {
-        TaskUtil.runAsync(plugin, () -> {
+        SchedulerUtil.runTaskAsynchronously(() -> {
             int fetched = 0;
             int failed = 0;
             for (String name : names) {
@@ -137,7 +137,7 @@ public class NpcSkinCache {
      */
     private void save() {
         ensureParentDir();
-        TaskUtil.runAsync(plugin, this::doSave);
+        SchedulerUtil.runTaskAsynchronously(this::doSave);
     }
 
     /**

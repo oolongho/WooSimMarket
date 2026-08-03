@@ -2,6 +2,7 @@ package com.oolongho.woosimmarket.hook;
 
 import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
+import net.kyori.adventure.text.Component;
 import net.momirealms.craftengine.bukkit.api.CraftEngineBlocks;
 import net.momirealms.craftengine.bukkit.api.CraftEngineItems;
 import net.momirealms.craftengine.bukkit.item.BukkitItemDefinition;
@@ -266,5 +267,90 @@ public class CraftEngineHook {
             return null;
         }
         return itemDefinition.buildBukkitItem();
+    }
+
+    /**
+     * 获取物品的 itemId（原版 = {@link Material#name()}，CE 物品 = {@code namespace:path}）。
+     *
+     * <p>CE 未就绪或非 CE 物品返回 {@link Material#name()}。</p>
+     *
+     * @param itemStack 物品
+     * @return itemId；itemStack 为 null 返回 null
+     */
+    @Nullable
+    public String getItemId(ItemStack itemStack) {
+        if (itemStack == null) {
+            return null;
+        }
+        if (ready && CraftEngineItems.isCustomItem(itemStack)) {
+            try {
+                Key customId = CraftEngineItems.getCustomItemId(itemStack);
+                if (customId != null) {
+                    return customId.asString();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return itemStack.getType().name();
+    }
+
+    /**
+     * 根据 itemId 构造 {@link ItemStack}。
+     *
+     * <p>CE 物品（含 {@code :}）走 {@link CraftEngineItems#byId(Key)} →
+     * {@link BukkitItemDefinition#buildBukkitItem()}；原版走 {@link Material#matchMaterial(String)}；
+     * 失败回退 {@link Material#PAPER}。</p>
+     *
+     * @param itemId 物品 ID
+     * @return 物品；itemId 为 null 返回 PAPER
+     */
+    public ItemStack createItemStack(String itemId) {
+        if (itemId == null) {
+            return new ItemStack(Material.PAPER);
+        }
+        if (ready && itemId.contains(":")) {
+            try {
+                BukkitItemDefinition def = CraftEngineItems.byId(Key.of(itemId));
+                if (def != null) {
+                    return def.buildBukkitItem();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        Material material = Material.matchMaterial(itemId);
+        return material == null ? new ItemStack(Material.PAPER) : new ItemStack(material);
+    }
+
+    /**
+     * 构造物品展示名的 translatable 组件。
+     *
+     * <p>原版物品用 {@link Material#translationKey()} 让客户端翻译；
+     * CE 物品尝试取 {@link BukkitItemDefinition#translationKey()}，无则回退 {@code text(itemId)}。
+     * CE 未就绪时，CE 物品（含 {@code :}）回退 {@code text(itemId)}，原版物品仍走 translationKey。</p>
+     *
+     * @param itemId 物品 ID
+     * @return 展示名组件；itemId 为 null 返回 {@code text("?")}
+     */
+    public Component displayName(String itemId) {
+        if (itemId == null) {
+            return Component.text("?");
+        }
+        if (ready && itemId.contains(":")) {
+            try {
+                BukkitItemDefinition def = CraftEngineItems.byId(Key.of(itemId));
+                if (def != null) {
+                    String translationKey = def.translationKey();
+                    if (translationKey != null) {
+                        return Component.translatable(translationKey);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        Material material = Material.matchMaterial(itemId);
+        if (material != null) {
+            return Component.translatable(material.translationKey());
+        }
+        return Component.text(itemId);
     }
 }

@@ -7,7 +7,7 @@ import org.bukkit.inventory.ItemStack;
 /**
  * 货架领域模型（可变）。
  *
- * <p>{@code itemStack}、{@code price}、{@code stock}、{@code enabled} 可变，其余不可变。
+ * <p>{@code itemStack}、{@code price}、{@code stock}、{@code enabled}、{@code itemId} 可变，其余不可变。
  * 与 {@link ShelfRecord} 双向转换：序列化时 ItemStack → Base64，反序列化时 Base64 → ItemStack。</p>
  *
  * @author oolongho
@@ -29,9 +29,11 @@ public class Shelf {
     private int stock;
     private final int maxStock;
     private boolean enabled;
+    private String itemId;
 
     public Shelf(String id, String shopId, String world, int x, int y, int z,
-                 String facing, ItemStack itemStack, double price, int stock, int maxStock, boolean enabled) {
+                 String facing, ItemStack itemStack, double price, int stock, int maxStock, boolean enabled,
+                 String itemId) {
         this.id = id;
         this.shopId = shopId;
         this.world = world;
@@ -44,6 +46,7 @@ public class Shelf {
         this.stock = stock;
         this.maxStock = maxStock > 0 ? maxStock : DEFAULT_MAX_STOCK;
         this.enabled = enabled;
+        this.itemId = itemId;
     }
 
     /**
@@ -65,7 +68,8 @@ public class Shelf {
                 record.price(),
                 record.stock(),
                 record.maxStock(),
-                record.enabled()
+                record.enabled(),
+                record.itemId()
         );
     }
 
@@ -78,7 +82,7 @@ public class Shelf {
         return new ShelfRecord(
                 id, shopId, world, x, y, z, facing,
                 SerializationUtils.serializeItemStack(itemStack),
-                price, stock, maxStock, enabled
+                price, stock, maxStock, enabled, itemId
         );
     }
 
@@ -174,5 +178,13 @@ public class Shelf {
 
     public void enabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public String itemId() {
+        return itemId;
+    }
+
+    public void itemId(String itemId) {
+        this.itemId = itemId;
     }
 }

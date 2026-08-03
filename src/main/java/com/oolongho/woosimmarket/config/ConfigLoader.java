@@ -40,6 +40,9 @@ public class ConfigLoader {
     private int shopLimit;
     private double shopMinDistance;
 
+    // shelf
+    private int shelfMaxEnabledPerPlayer;
+
     // npc
     private int npcSpawnIntervalMin;
     private int npcSpawnIntervalMax;
@@ -164,6 +167,9 @@ public class ConfigLoader {
         shopBindRadius = Math.max(1, marketConfig.getInt("shop.bind-radius", 16));
         shopLimit = Math.max(1, marketConfig.getInt("shop.limit", 1));
         shopMinDistance = Math.max(0.0, marketConfig.getDouble("shop.min-distance", 8.0));
+
+        // shelf
+        shelfMaxEnabledPerPlayer = config.getInt("shelf.max-enabled-per-player", 8);
 
         // npc（从 npc.yml 读取）
         npcSpawnIntervalMin = Math.max(1, npcConfig.getInt("npc.spawn-interval-min", 30));
@@ -330,6 +336,11 @@ public class ConfigLoader {
 
     public double getShopMinDistance() {
         return shopMinDistance;
+    }
+
+    /** 每个玩家可同时启用的货架数量上限（默认 8，可被权限 woosimmarket.shelf.num.N 覆盖）。 */
+    public int getShelfMaxEnabledPerPlayer() {
+        return shelfMaxEnabledPerPlayer;
     }
 
     /**

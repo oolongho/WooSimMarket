@@ -1,7 +1,7 @@
 package com.oolongho.woosimmarket.npc;
 
 import com.oolongho.woosimmarket.WooSimMarket;
-import org.bukkit.Bukkit;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -79,7 +79,7 @@ public final class NpcPathfinder {
         }
 
         // 异步阶段：A* 算法在 ChunkSnapshot 上运行
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        SchedulerUtil.runTaskAsynchronously(() -> {
             List<Location> path;
             try {
                 path = computePath(snapshots, world, start, target, maxIterations, avoidHazards);
@@ -98,7 +98,7 @@ public final class NpcPathfinder {
                     plugin.getLogger().info(() -> "[Pathfinder] 寻路成功: " + result.size() + " 个路径点");
                 }
             }
-            Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            SchedulerUtil.runTask(() -> callback.accept(result));
         });
     }
 

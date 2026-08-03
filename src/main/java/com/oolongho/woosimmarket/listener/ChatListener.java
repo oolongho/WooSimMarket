@@ -1,11 +1,10 @@
 package com.oolongho.woosimmarket.listener;
 
-import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.shop.PricingManager;
 import com.oolongho.woosimmarket.shop.ShopNamingManager;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -27,12 +26,10 @@ public class ChatListener implements Listener {
 
     private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
 
-    private final WooSimMarket plugin;
     private final PricingManager pricingManager;
     private final ShopNamingManager shopNamingManager;
 
-    public ChatListener(WooSimMarket plugin, PricingManager pricingManager, ShopNamingManager shopNamingManager) {
-        this.plugin = plugin;
+    public ChatListener(PricingManager pricingManager, ShopNamingManager shopNamingManager) {
         this.pricingManager = pricingManager;
         this.shopNamingManager = shopNamingManager;
     }
@@ -55,8 +52,10 @@ public class ChatListener implements Listener {
         event.setCancelled(true);
         String input = PLAIN.serialize(event.message());
 
-        // 调度到主线程：GUI 操作（重开 GUI）/实体操作（更新全息文本）必须在主线程执行
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        // 调度到玩家所在区域线程：GUI 操作（重开 GUI）与 ShopDisplayManager.updateShopName
+        // （操作 TextDisplay 实体）必须在区域线程执行。Folia 上用 Player.getScheduler 路由，
+        // Paper 退化为 Bukkit 主线程。改名场景玩家通常在 shop 附近，与 shop 实体同区域。
+        SchedulerUtil.runTask(player, () -> {
             if (pricing) {
                 pricingManager.handleInput(player, input);
             } else {

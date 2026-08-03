@@ -3,6 +3,7 @@ package com.oolongho.woosimmarket.gui;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.economy.EconomyManager;
+import com.oolongho.woosimmarket.hook.CraftEngineHook;
 import com.oolongho.woosimmarket.market.MarketManager;
 import com.oolongho.woosimmarket.market.MarketManager.ItemInfo;
 import com.oolongho.woosimmarket.model.Shelf;
@@ -60,6 +61,7 @@ public class PriceTableGui implements InventoryHolder {
     private final MarketManager marketManager;
     private final Messages messages;
     private final ConfigLoader configLoader;
+    private final CraftEngineHook craftEngine;
     private final Inventory inventory;
     private final List<Map.Entry<String, ItemInfo>> entries;
     private final int totalPages;
@@ -69,8 +71,8 @@ public class PriceTableGui implements InventoryHolder {
      * 从商店面板入口构造（返回时回到 ShopGui）。
      */
     public PriceTableGui(Shop shop, EconomyManager economyManager, MarketManager marketManager,
-                         Messages messages, ConfigLoader configLoader) {
-        this(shop, null, economyManager, marketManager, messages, configLoader);
+                         Messages messages, ConfigLoader configLoader, CraftEngineHook craftEngine) {
+        this(shop, null, economyManager, marketManager, messages, configLoader, craftEngine);
     }
 
     /**
@@ -80,13 +82,15 @@ public class PriceTableGui implements InventoryHolder {
      * @param sourceShelf  来源货架（非空表示从 ShelfGui 进入；为空表示从 ShopGui 进入）
      */
     public PriceTableGui(Shop shop, Shelf sourceShelf, EconomyManager economyManager,
-                         MarketManager marketManager, Messages messages, ConfigLoader configLoader) {
+                         MarketManager marketManager, Messages messages, ConfigLoader configLoader,
+                         CraftEngineHook craftEngine) {
         this.shop = shop;
         this.sourceShelf = sourceShelf;
         this.economyManager = economyManager;
         this.marketManager = marketManager;
         this.messages = messages;
         this.configLoader = configLoader;
+        this.craftEngine = craftEngine;
         this.inventory = Bukkit.createInventory(this, SIZE, messages.get("gui-price-table-title"));
         // 保序：MarketManager.getItemInfos() 返回 LinkedHashMap，按 items.yml 配置顺序
         this.entries = new ArrayList<>(marketManager.getItemInfos().entrySet());
@@ -171,14 +175,10 @@ public class PriceTableGui implements InventoryHolder {
     }
 
     private ItemStack createItemEntry(String itemId, ItemInfo info) {
-        Material material = Material.matchMaterial(itemId);
-        if (material == null) {
-            material = Material.PAPER;
-        }
-        ItemStack item = new ItemStack(material);
+        ItemStack item = craftEngine.createItemStack(itemId);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.displayName(Component.text(itemId));
+            meta.displayName(craftEngine.displayName(itemId));
             List<Component> lore = new ArrayList<>();
             lore.add(messages.get("gui-price-table-item-lore",
                     "price", economyManager.format(info.standardPrice())));

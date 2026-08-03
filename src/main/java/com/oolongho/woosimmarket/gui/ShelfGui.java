@@ -1,6 +1,7 @@
 package com.oolongho.woosimmarket.gui;
 
 import com.oolongho.woosimmarket.config.Messages;
+import com.oolongho.woosimmarket.hook.CraftEngineHook;
 import com.oolongho.woosimmarket.model.Shelf;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -24,14 +25,17 @@ import java.util.List;
  * </pre>
  * <ul>
  *   <li>9 个商品槽 {3,4,5,12,13,14,21,22,23}：玩家放入/取出物品，打开时按 maxStackSize 分配 stock</li>
- *   <li>slot 10：价格按钮（绑定后图标变为绑定物品 Material + 附魔光效，未绑定为 GOLD_INGOT）</li>
+ *   <li>slot 10：价格按钮（绑定后图标为绑定物品 + 附魔光效，未绑定为 GOLD_INGOT）</li>
  *   <li>slot 16：启用/禁用按钮</li>
  *   <li>slot 19：标准价表按钮（BOOK，查看全物品标准价）</li>
  *   <li>其余：灰色玻璃边框（不可交互）</li>
  * </ul></p>
  *
- * <p>物品绑定：玩家放入第一个物品时按 Material 绑定，之后仅允许同种类放入 9 格。
- * 关闭时汇总 9 格 stock；9 格全空则解绑（itemStack=null, stock=0）。</p>
+ * <p>物品绑定：玩家放入第一个物品时按 itemId 绑定（原版 {@link Material#name()} 或 CE namespace:path），
+ * 之后仅允许同 itemId 物品放入 9 格。关闭时汇总 9 格 stock；9 格全空则解绑（itemStack=null, stock=0, itemId=null）。</p>
+ *
+ * <p>价格按钮需 {@link CraftEngineHook} 构造本地化图标与 displayName，由监听器 onOpen 时调用
+ * {@link #refresh(Messages, CraftEngineHook)} 注入（构造器不持有 craftEngine）。</p>
  *
  * @author oolongho
  */
@@ -66,7 +70,7 @@ public class ShelfGui implements InventoryHolder {
             }
         }
         distributeStock();
-        inventory.setItem(SLOT_PRICE, createPriceButton(persistentBoundMaterial(), shelf.price(), messages));
+        // 价格按钮需 CraftEngineHook 构造本地化图标，由监听器 onOpen 时调用 refresh 注入
         inventory.setItem(SLOT_TOGGLE, createToggleButton(shelf.enabled(), messages));
         inventory.setItem(SLOT_PRICE_TABLE, createPriceTableButton(messages));
     }
@@ -83,10 +87,11 @@ public class ShelfGui implements InventoryHolder {
     /**
      * 刷新价格与开关按钮（不清空商品槽，玩家可能已放入物品）。
      *
-     * @param messages 消息管理器
+     * @param messages     消息管理器
+     * @param craftEngine   CraftEngine 钩子（用于构造价格按钮图标与 displayName）
      */
-    public void refresh(Messages messages) {
-        inventory.setItem(SLOT_PRICE, createPriceButton(persistentBoundMaterial(), shelf.price(), messages));
+    public void refresh(Messages messages, CraftEngineHook craftEngine) {
+        inventory.setItem(SLOT_PRICE, createPriceButton(craftEngine, persistentBoundItemId(), shelf.price(), messages));
         inventory.setItem(SLOT_TOGGLE, createToggleButton(shelf.enabled(), messages));
     }
 
@@ -155,18 +160,20 @@ public class ShelfGui implements InventoryHolder {
     }
 
     /**
-     * 当前活体绑定材质（点击/拖拽校验用）：优先取 9 格中首个物品，回落到 shelf 持久化物品；均无返回 null。
+     * 当前活体绑定 itemId（点击/拖拽校验用）：优先取 9 格中首个物品的 itemId，
+     * 回落到 shelf 持久化 itemId；均无返回 null。
      *
-     * @return 绑定材质，未绑定返回 null
+     * @param craftEngine CraftEngine 钩子（用于计算物品 itemId）
+     * @return 绑定 itemId，未绑定返回 null
      */
-    public Material liveBoundMaterial() {
+    public String liveBoundItemId(CraftEngineHook craftEngine) {
         for (int slot : ITEM_SLOTS) {
             ItemStack it = inventory.getItem(slot);
             if (it != null && !it.getType().isAir()) {
-                return it.getType();
+                return craftEngine.getItemId(it);
             }
         }
-        return persistentBoundMaterial();
+        return persistentBoundItemId();
     }
 
     /**
@@ -183,10 +190,9 @@ public class ShelfGui implements InventoryHolder {
 
     // ===== 内部 =====
 
-    /** 持久化绑定材质（shelf.itemStack），用于渲染价格按钮。 */
-    private Material persistentBoundMaterial() {
-        ItemStack is = shelf.itemStack();
-        return (is != null && !is.getType().isAir()) ? is.getType() : null;
+    /** 持久化绑定 itemId（shelf.itemId），用于渲染价格按钮。 */
+    private String persistentBoundItemId() {
+        return shelf.itemId();
     }
 
     private static ItemStack createBorder() {
@@ -200,19 +206,20 @@ public class ShelfGui implements InventoryHolder {
     }
 
     /**
-     * 价格按钮：绑定后图标为绑定物品 Material + 附魔光效，未绑定为 GOLD_INGOT。
+     * 价格按钮：绑定后图标为 craftEngine 构造的绑定物品 + 附魔光效，未绑定为 GOLD_INGOT。
+     * displayName 绑定时用 {@link CraftEngineHook#displayName(String)}（translatable），
+     * 未绑定时用 {@code gui-shelf-set-price}。
      */
-    private static ItemStack createPriceButton(Material boundMaterial, double price, Messages messages) {
-        boolean bound = boundMaterial != null && !boundMaterial.isAir();
-        ItemStack item = new ItemStack(bound ? boundMaterial : Material.GOLD_INGOT);
+    private static ItemStack createPriceButton(CraftEngineHook craftEngine, String itemId, double price, Messages messages) {
+        boolean bound = itemId != null;
+        ItemStack item = bound ? craftEngine.createItemStack(itemId) : new ItemStack(Material.GOLD_INGOT);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.displayName(messages.get("gui-shelf-set-price"));
+            meta.displayName(bound ? craftEngine.displayName(itemId) : messages.get("gui-shelf-set-price"));
             meta.lore(List.of(
                     messages.get("gui-shelf-current-price", "price", String.format("%.2f", price)),
                     messages.get(bound ? "gui-shelf-bound" : "gui-shelf-unbound")));
             if (bound) {
-                // 附魔光效：setEnchantmentGlintOverride 仅添加视觉光效，不附加伪附魔/无需隐藏 flag
                 meta.setEnchantmentGlintOverride(true);
             }
             item.setItemMeta(meta);

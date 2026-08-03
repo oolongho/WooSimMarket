@@ -4,7 +4,7 @@ import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.npc.SimNpc;
-import com.oolongho.woosimmarket.util.TaskUtil;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
@@ -13,7 +13,6 @@ import org.bukkit.World;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Map;
 import java.util.UUID;
@@ -83,7 +82,7 @@ public class ThoughtDisplayManager {
     /** 展示句柄：TextDisplay 引用 + 可变 flashTask（非 record，flashTask 需可变）。 */
     private static final class ThoughtHandle {
         final TextDisplay entity;
-        BukkitTask flashTask;
+        SchedulerUtil.TaskHandle flashTask;
 
         ThoughtHandle(TextDisplay entity) {
             this.entity = entity;
@@ -186,8 +185,12 @@ public class ThoughtDisplayManager {
         if (handle.flashTask != null) {
             handle.flashTask.cancel();
         }
-        handle.flashTask = TaskUtil.runLater(
-                plugin, () -> despawn(npc), configLoader.getThoughtDisplayFlashDurationTicks());
+        // despawn 必须 in TextDisplay 所属区域线程执行（Folia 上实体操作不可跨区域）
+        // 用 EntityScheduler 路由，实体已销毁时任务自动取消（不执行）
+        handle.flashTask = SchedulerUtil.runTaskLater(
+                handle.entity,
+                () -> despawn(npc),
+                configLoader.getThoughtDisplayFlashDurationTicks());
     }
 
     /**

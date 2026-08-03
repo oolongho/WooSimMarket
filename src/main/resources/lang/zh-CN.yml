@@ -23,12 +23,15 @@ shop-notify-off: "{prefix}<color:#9CA3AF>已关闭购买提示。</color>"
 shop-shelf-all-enabled: "{prefix}<color:#10B981>所有货架已启用。</color>"
 shop-shelf-all-disabled: "{prefix}<color:#EF4444>所有货架已禁用。</color>"
 shop-shelf-empty: "{prefix}<color:#F59E0B>商店暂无货架。</color>"
+shop-not-owner: "<color:#EF4444>只有店长才能破坏收银机。</color>"
+shop-auto-withdraw: "{prefix}<color:#10B981>商店余额 {amount} 已自动转入你的账户。</color>"
 
 # 货架
 shelf-bound: "{prefix}<color:#10B981>货架已绑定到商店，请打开货架管理界面启用。</color>"
 shelf-too-far: "{prefix}<color:#EF4444>货架距离收银机太远，无法绑定。</color>"
 shelf-not-found: "{prefix}<color:#EF4444>未找到货架。</color>"
 shelf-disabled: "{prefix}<color:#F59E0B>该货架已禁用。</color>"
+shelf-limit-reached: "<color:#EF4444>已达到启用货架上限（{limit}），请先禁用其他货架。</color>"
 
 # 可视化
 range-not-found: "{prefix}<color:#EF4444>附近未找到你的商店。</color>"

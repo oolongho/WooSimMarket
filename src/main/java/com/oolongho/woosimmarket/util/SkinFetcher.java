@@ -31,7 +31,7 @@ import java.time.Duration;
  * }</pre></p>
  *
  * <p>本类仅做同步 HTTP 调用 + JSON 解析，异步调度由调用方
- * （{@code NpcSkinCache.preloadAsync} 通过 {@link TaskUtil#runAsync}）负责。</p>
+ * （{@code NpcSkinCache.preloadAsync} 通过 {@link SchedulerUtil#runTaskAsynchronously}）负责。</p>
  *
  * <p>失败策略：任何异常（网络错误、超时、HTTP 非 2xx、JSON 解析错误、
  * 字段缺失）均返回 {@code null}，由调用方走 Steve 兜底（NpcPacketSender

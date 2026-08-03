@@ -15,7 +15,7 @@ import java.util.List;
  * 入参 null 安全：null 入参返回 false/空集合，并跳过 SQL 执行；SQL 异常与运行时异常（如
  * 连接未初始化）被捕获并记录日志后返回失败结果，不让异常向上传播。</p>
  *
- * <p>线程模型：本层同步执行，业务上层应通过 {@code TaskUtil} 将数据库 IO 投递到异步线程。</p>
+ * <p>线程模型：本层同步执行，业务上层应通过 {@code SchedulerUtil} 将数据库 IO 投递到异步线程。</p>
  *
  * @author oolongho
  */
