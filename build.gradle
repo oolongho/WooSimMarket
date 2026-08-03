@@ -3,16 +3,18 @@ plugins {
     id 'io.papermc.paperweight.userdev' version '2.0.0-beta.21'
 }
 
+paperweight.reobfArtifactConfiguration = io.papermc.paperweight.userdev.ReobfArtifactConfiguration.getMOJANG_PRODUCTION()
+
 group = 'com.oolongho'
 version = 'alpha-0.1.0'
 
 java {
-    // Paper 26.1+ 强制 JVM 25+，插件字节码目标同步改为 Java 25
-    // （覆盖风格指南的 Java 21，因 Paper 26.1+ dev bundle 已不支持更低版本运行时）
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+    // Java 21 + 1.21.x dev bundle：单 jar 兼容 Paper/Folia/Spigot 1.21+~26.1+
+    // 通过运行时 NmsAdapter 选择实现，编译期统一用 1.21.x bundle（含 PositionMoveRotation/Avatar 反射可见性等）
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -29,7 +31,7 @@ repositories {
 }
 
 dependencies {
-    paperweight.paperDevBundle('26.1.2.build.74-stable')
+    paperweight.paperDevBundle('1.21.11-R0.1-SNAPSHOT')
     // CraftEngine（自定义方块 API，运行期硬依赖）—— 本地 libs，规避 Gradle HTTP client TLS 问题
     compileOnly fileTree(dir: 'libs', include: ['craft-engine-*.jar'])
     // VaultAPI 传递 org.bukkit:bukkit 与 paper-api 的 bukkit capability 冲突，需排除
@@ -73,7 +75,7 @@ tasks.register('buildInfo') {
         println "=========================================="
         println "Version: ${projectVersion}"
         println "Java: ${projectJavaVersion}"
-        println "Paper: 26.1+ (api-version 1.21 compatible)"
+        println "Paper/Folia/Spigot: 1.21+ (single jar, api-version 1.21)"
         println "=========================================="
     }
 }
