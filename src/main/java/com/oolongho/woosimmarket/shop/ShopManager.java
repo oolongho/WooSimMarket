@@ -329,15 +329,19 @@ public class ShopManager {
     /**
      * 统计指定玩家已启用的货架数（用于启用数量限制校验）。
      *
+     * <p>单次遍历货架索引 + O(1) 反查 shop owner，避免 getAllShops 复制
+     * 与嵌套 getShelvesByShop 扫描。</p>
+     *
      * @param ownerUuid 玩家 UUID
      * @return 该玩家所有 shop 下 enabled=true 的货架数
      */
     public int countEnabledShelvesByOwner(UUID ownerUuid) {
         int count = 0;
-        for (Shop shop : getAllShops()) {
-            if (!shop.ownerUuid().equals(ownerUuid)) continue;
-            for (Shelf shelf : getShelvesByShop(shop.id())) {
-                if (shelf.enabled()) count++;
+        for (Shelf shelf : shelvesById.values()) {
+            if (!shelf.enabled()) continue;
+            Shop shop = shopsById.get(shelf.shopId());
+            if (shop != null && ownerUuid.equals(shop.ownerUuid())) {
+                count++;
             }
         }
         return count;
