@@ -16,11 +16,6 @@ database:
   # SQLite 数据库文件路径
   file: data/woosimmarket.db
 
-# 货架配置
-shelf:
-  # 每个玩家可同时启用的货架数量上限（可被权限 woosimmarket.shelf.num.N 覆盖，取最大 N）
-  max-enabled-per-player: 8
-
 # 商店统计（purchase_log 保留与查询）
 stats:
   # 交易记录保留天数（超过则清理，每日执行一次清理任务）

@@ -6,6 +6,7 @@ prefix: "<white>[</white><color:#5EEAD4>WooSimMarket</color><white>]</white> "
 # 通用
 no-permission: "{prefix}<color:#EF4444>你没有权限执行此操作。</color>"
 player-only: "{prefix}<color:#EF4444>该命令只能由玩家执行。</color>"
+player-not-found: "{prefix}<color:#EF4444>未找到该玩家。</color>"
 config-reloaded: "{prefix}<color:#10B981>配置已重载。</color>"
 
 # 商店

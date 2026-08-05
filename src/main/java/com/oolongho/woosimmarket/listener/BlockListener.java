@@ -8,9 +8,12 @@ import com.oolongho.woosimmarket.hook.CraftEngineHook;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import com.oolongho.woosimmarket.visualize.ShelfDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopDisplayManager;
 import com.oolongho.woosimmarket.visualize.ShopRangeVisualizer;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Player;
@@ -126,15 +129,22 @@ public class BlockListener implements Listener {
                 // 破坏前掉落货架内全部物品（含绑定模板），避免物品静默丢失
                 if (shelf.stock() > 0 && shelf.itemStack() != null) {
                     ItemStack template = shelf.itemStack().clone();
-                    int remaining = shelf.stock();
+                    int totalStock = shelf.stock();
                     int maxStack = template.getMaxStackSize();
-                    while (remaining > 0) {
-                        int amt = Math.min(remaining, maxStack);
-                        ItemStack drop = template.clone();
-                        drop.setAmount(amt);
-                        block.getWorld().dropItemNaturally(block.getLocation(), drop);
-                        remaining -= amt;
-                    }
+                    Location dropLoc = block.getLocation();
+                    World dropWorld = block.getWorld();
+                    // Folia 上 dropItemNaturally 需在掉落位置所属区域线程执行
+                    // 玩家在区域边界破坏方块时，block 可能在另一区域
+                    SchedulerUtil.runTaskAt(dropLoc, () -> {
+                        int remaining = totalStock;
+                        while (remaining > 0) {
+                            int amt = Math.min(remaining, maxStack);
+                            ItemStack drop = template.clone();
+                            drop.setAmount(amt);
+                            dropWorld.dropItemNaturally(dropLoc, drop);
+                            remaining -= amt;
+                        }
+                    });
                 }
                 shopManager.removeShelf(shelf.id());
                 shelfDisplayManager.removeDisplay(shelf.id());
@@ -211,7 +221,7 @@ public class BlockListener implements Listener {
         int z = block.getZ();
 
         // 上限校验
-        int limit = plugin.getConfigLoader().getShopLimit();
+        int limit = plugin.getConfigLoader().getShopMaxShopsPerPlayer();
         if (shopManager.countShopsByOwner(player.getUniqueId()) >= limit) {
             event.setCancelled(true);
             messages.send(player, "shop-limit-reached");

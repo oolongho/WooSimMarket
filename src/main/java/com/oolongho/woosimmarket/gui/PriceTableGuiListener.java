@@ -110,7 +110,7 @@ public class PriceTableGuiListener implements Listener {
      */
     private void handleBackClick(PriceTableGui gui, Player player) {
         Shelf sourceShelf = gui.getSourceShelf();
-        SchedulerUtil.runTask(() -> {
+        SchedulerUtil.runTask(player, () -> {
             player.closeInventory();
             if (sourceShelf != null) {
                 // 从货架入口进入：返回 ShelfGui

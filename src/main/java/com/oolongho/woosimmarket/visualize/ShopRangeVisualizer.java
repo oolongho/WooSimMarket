@@ -3,10 +3,12 @@ package com.oolongho.woosimmarket.visualize;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.model.Shop;
 import com.oolongho.woosimmarket.util.SchedulerUtil;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Particle.DustOptions;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
@@ -77,7 +79,12 @@ public class ShopRangeVisualizer {
         final int maxFrames = seconds * 2;
 
         // 在 shop 所在区域线程执行 spawnParticle（Folia 上 World.spawnParticle 需区域上下文）
-        Location shopLoc = new Location(player.getWorld(), cx, cy, cz);
+        // 使用 shop 自身世界而非玩家世界 —— 即使跨世界调用方也保证粒子落在 shop 处
+        World shopWorld = Bukkit.getWorld(shop.world());
+        if (shopWorld == null) {
+            return; // shop 所在世界未加载，无法可视化
+        }
+        Location shopLoc = new Location(shopWorld, cx, cy, cz);
 
         // 自取消模式：lambda 通过外部 holder 持有自身句柄以在 maxFrames 后终止
         final int[] frame = {0};
@@ -87,7 +94,7 @@ public class ShopRangeVisualizer {
                 double angle = 2 * Math.PI * i / POINTS;
                 double px = cx + r * Math.cos(angle);
                 double pz = cz + r * Math.sin(angle);
-                player.getWorld().spawnParticle(Particle.DUST, px, cy, pz, 1, DUST_OPTIONS);
+                shopWorld.spawnParticle(Particle.DUST, px, cy, pz, 1, DUST_OPTIONS);
             }
             if (++frame[0] >= maxFrames) {
                 holder[0].cancel();

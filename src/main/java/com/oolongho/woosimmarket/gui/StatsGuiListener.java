@@ -101,7 +101,7 @@ public class StatsGuiListener implements Listener {
      */
     private void handleBackClick(StatsGui gui, Player player) {
         Shop shop = gui.getShop();
-        SchedulerUtil.runTask(() -> {
+        SchedulerUtil.runTask(player, () -> {
             player.closeInventory();
             new ShopGui(shop, economyManager, messages, plugin.getShopManager()).open(player);
         });

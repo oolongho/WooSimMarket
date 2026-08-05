@@ -54,7 +54,12 @@ public class ListCommand implements SubCommandHandler {
                 messages.send(sender, "no-permission");
                 return true;
             }
-            OfflinePlayer target = Bukkit.getOfflinePlayer(args[0]);
+            // 仅查缓存，避免触发可能阻塞主线程的 I/O（如白名单模式下的网络查询）
+            OfflinePlayer target = Bukkit.getOfflinePlayerIfCached(args[0]);
+            if (target == null) {
+                messages.send(sender, "player-not-found");
+                return true;
+            }
             targetUuid = target.getUniqueId();
             targetName = target.getName() != null ? target.getName() : args[0];
         }

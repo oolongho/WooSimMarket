@@ -3,6 +3,7 @@ package com.oolongho.woosimmarket.command;
 import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.Messages;
 import com.oolongho.woosimmarket.hook.CraftEngineHook;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -46,7 +47,7 @@ public class GiveCommand implements SubCommandHandler {
 
         Player target = Bukkit.getPlayerExact(args[0]);
         if (target == null) {
-            messages.send(sender, "player-only");
+            messages.send(sender, "player-not-found");
             return true;
         }
 
@@ -62,9 +63,12 @@ public class GiveCommand implements SubCommandHandler {
             return true;
         }
 
-        var leftover = target.getInventory().addItem(item);
-        leftover.values().forEach(left -> target.getWorld().dropItem(target.getLocation(), left));
-        messages.send(sender, "command-give-success", "item", blockType, "player", target.getName());
+        // 物品给予操作必须在 target 所属区域线程（Folia）或主线程（Paper）执行
+        SchedulerUtil.runTask(target, () -> {
+            var leftover = target.getInventory().addItem(item);
+            leftover.values().forEach(left -> target.getWorld().dropItem(target.getLocation(), left));
+            messages.send(sender, "command-give-success", "item", blockType, "player", target.getName());
+        });
         return true;
     }
 

@@ -54,12 +54,20 @@ public class ShelfGui implements InventoryHolder {
 
     private final Shelf shelf;
     private final Inventory inventory;
+    /** 打开时按 maxStackSize 分配到 9 格的 stock 快照（onClose delta 计算用，避免覆盖 GUI 开启期间 NPC 购买导致的 shelf.stock 变化）。 */
+    private final int distributedAtOpen;
 
     public ShelfGui(Shelf shelf, Messages messages) {
         this.shelf = shelf;
         Component title = messages.get("gui-shelf-title");
         this.inventory = Bukkit.createInventory(this, SIZE, title);
         render(messages);
+        this.distributedAtOpen = collectStock();
+    }
+
+    /** @return 打开时 9 格分配的 stock 快照（onClose delta 计算用） */
+    public int getDistributedAtOpen() {
+        return distributedAtOpen;
     }
 
     private void render(Messages messages) {

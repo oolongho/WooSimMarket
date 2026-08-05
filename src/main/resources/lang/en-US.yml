@@ -5,6 +5,7 @@ prefix: "<white>[</white><color:#5EEAD4>WooSimMarket</color><white>]</white> "
 # General
 no-permission: "{prefix}<color:#EF4444>You do not have permission to do this.</color>"
 player-only: "{prefix}<color:#EF4444>This command can only be run by a player.</color>"
+player-not-found: "{prefix}<color:#EF4444>Player not found.</color>"
 config-reloaded: "{prefix}<color:#10B981>Configuration reloaded.</color>"
 
 # Shop

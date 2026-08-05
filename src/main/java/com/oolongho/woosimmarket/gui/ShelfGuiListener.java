@@ -151,7 +151,14 @@ public class ShelfGuiListener implements Listener {
     }
 
     /**
-     * 关闭事件：汇总 9 格 stock 与模板，同步 shelf 并落库；9 格全空则解绑。
+     * 关闭事件：基于 delta 同步 shelf.stock，落库并刷新展示。
+     *
+     * <p>使用 delta 而非直接覆盖：玩家在 GUI 开启期间，NPC 可能通过
+     * {@link com.oolongho.woosimmarket.npc.NpcManager#handlePurchase} 直接调用
+     * {@code shelf.deductStock} 修改 shelf.stock。若 onClose 用 9 格汇总直接覆盖，
+     * 会把 NPC 扣减后的 stock 回滚到玩家开启 GUI 时的旧值，造成刷物/刷钱。
+     * delta = collected - distributedAtOpen，反映玩家在 GUI 内的净增减；
+     * newStock = shelf.stock() + delta，保证 NPC 修改不被覆盖。</p>
      *
      * <p>若货架已被删除（如方块被破坏），将 9 格物品归还给玩家，
      * 背包满时掉落在玩家脚下，避免物品静默丢失。</p>
@@ -163,7 +170,7 @@ public class ShelfGuiListener implements Listener {
         }
 
         Shelf shelf = gui.getShelf();
-        int stock = gui.collectStock();
+        int collected = gui.collectStock();
         ItemStack template = gui.collectTemplate();
 
         // 货架已被删除（方块破坏等），归还 9 格物品给玩家
@@ -180,14 +187,16 @@ public class ShelfGuiListener implements Listener {
             return;
         }
 
-        if (stock == 0 || template == null) {
-            // 9 格全空 → 解绑
+        int distributedAtOpen = gui.getDistributedAtOpen();
+        int newStock = Math.max(0, shelf.stock() + (collected - distributedAtOpen));
+        if (newStock == 0 || template == null) {
+            // 9 格全空（玩家取出全部）或货架已无库存 → 解绑
             shelf.itemStack(null);
             shelf.stock(0);
             shelf.itemId(null);
         } else {
             shelf.itemStack(template);
-            shelf.stock(stock);
+            shelf.stock(newStock);
             shelf.itemId(gui.liveBoundItemId(plugin.getCraftEngineHook()));
         }
         shopManager.saveShelf(shelf);
@@ -201,7 +210,7 @@ public class ShelfGuiListener implements Listener {
      */
     private void handlePriceClick(ShelfGui gui, Player player) {
         Shelf shelf = gui.getShelf();
-        SchedulerUtil.runTask(() -> {
+        SchedulerUtil.runTask(player, () -> {
             player.closeInventory();
             pricingManager.startPricing(player, shelf);
         });
@@ -240,7 +249,7 @@ public class ShelfGuiListener implements Listener {
      */
     private void handlePriceTableClick(ShelfGui gui, Player player) {
         Shelf shelf = gui.getShelf();
-        SchedulerUtil.runTask(() -> {
+        SchedulerUtil.runTask(player, () -> {
             player.closeInventory();
             Shop shop = shopManager.getShop(shelf.shopId());
             new PriceTableGui(shop, shelf, plugin.getEconomyManager(),

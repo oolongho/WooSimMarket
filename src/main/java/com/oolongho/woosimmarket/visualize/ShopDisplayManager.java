@@ -92,10 +92,11 @@ public class ShopDisplayManager {
      */
     public void init() {
         // 清理上次崩溃残留的展示实体（遍历所有已加载世界）
+        // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : world.getEntities()) {
                 if (entity.getScoreboardTags().contains(SCOREBOARD_TAG)) {
-                    entity.remove();
+                    SchedulerUtil.execute(entity, entity::remove);
                 }
             }
         }
@@ -137,35 +138,39 @@ public class ShopDisplayManager {
         // ItemDisplay：店主头颅，billboard 视角跟随玩家
         Location headLoc = new Location(world,
                 shop.x() + 0.5, shop.y() + configLoader.getShopDisplayHeadYOffset(), shop.z() + 0.5);
-        ItemStack headItem = new ItemStack(Material.PLAYER_HEAD);
-        ItemMeta headMeta = headItem.getItemMeta();
-        if (headMeta instanceof SkullMeta skullMeta) {
-            skullMeta.setPlayerProfile(Bukkit.createProfile(shop.ownerUuid()));
-            headItem.setItemMeta(skullMeta);
-        }
-        ItemDisplay itemDisplay = world.spawn(headLoc, ItemDisplay.class, entity -> {
-            // VERTICAL：仅水平旋转朝向玩家，垂直方向固定（头颅不上下俯仰）
-            entity.setBillboard(Display.Billboard.VERTICAL);
-            entity.setTransformation(new Transformation(
-                    new Vector3f(),
-                    new Quaternionf().rotateY((float) Math.PI),
-                    new Vector3f(DISPLAY_SCALE, DISPLAY_SCALE, DISPLAY_SCALE),
-                    new Quaternionf()));
-            entity.setItemStack(headItem);
-            markDisplayEntity(entity, shop.id());
-        });
-
         // TextDisplay：店名（取自 shop.name），billboard 视角跟随玩家
         Location nameLoc = new Location(world,
                 shop.x() + 0.5, shop.y() + configLoader.getShopDisplayNameYOffset(), shop.z() + 0.5);
-        TextDisplay textDisplay = world.spawn(nameLoc, TextDisplay.class, entity -> {
-            // VERTICAL：仅水平旋转朝向玩家，垂直方向固定（店名不上下俯仰）
-            entity.setBillboard(Display.Billboard.VERTICAL);
-            entity.text(buildShopNameComponent(shop));
-            markDisplayEntity(entity, shop.id());
-        });
 
-        handlesByShopId.put(shop.id(), new ShopDisplayHandle(itemDisplay.getUniqueId(), textDisplay.getUniqueId()));
+        // Folia 上 world.spawn 必须在 spawn 位置所属区域线程执行，用 runTaskAt 路由；
+        // headLoc 与 nameLoc 同 x,z 属同一区域，路由到 headLoc 即可
+        SchedulerUtil.runTaskAt(headLoc, () -> {
+            ItemStack headItem = new ItemStack(Material.PLAYER_HEAD);
+            ItemMeta headMeta = headItem.getItemMeta();
+            if (headMeta instanceof SkullMeta skullMeta) {
+                skullMeta.setPlayerProfile(Bukkit.createProfile(shop.ownerUuid()));
+                headItem.setItemMeta(skullMeta);
+            }
+            ItemDisplay itemDisplay = world.spawn(headLoc, ItemDisplay.class, entity -> {
+                // VERTICAL：仅水平旋转朝向玩家，垂直方向固定（头颅不上下俯仰）
+                entity.setBillboard(Display.Billboard.VERTICAL);
+                entity.setTransformation(new Transformation(
+                        new Vector3f(),
+                        new Quaternionf().rotateY((float) Math.PI),
+                        new Vector3f(DISPLAY_SCALE, DISPLAY_SCALE, DISPLAY_SCALE),
+                        new Quaternionf()));
+                entity.setItemStack(headItem);
+                markDisplayEntity(entity, shop.id());
+            });
+            TextDisplay textDisplay = world.spawn(nameLoc, TextDisplay.class, entity -> {
+                // VERTICAL：仅水平旋转朝向玩家，垂直方向固定（店名不上下俯仰）
+                entity.setBillboard(Display.Billboard.VERTICAL);
+                entity.text(buildShopNameComponent(shop));
+                markDisplayEntity(entity, shop.id());
+            });
+            handlesByShopId.put(shop.id(),
+                    new ShopDisplayHandle(itemDisplay.getUniqueId(), textDisplay.getUniqueId()));
+        });
     }
 
     /**
@@ -280,9 +285,10 @@ public class ShopDisplayManager {
      */
     public void onChunkLoad(Chunk chunk) {
         // 清理 chunk 内所有展示实体（崩溃残留 + 持久化实体，统一重建）
+        // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
         for (Entity entity : chunk.getEntities()) {
             if (entity.getScoreboardTags().contains(SCOREBOARD_TAG)) {
-                entity.remove();
+                SchedulerUtil.execute(entity, entity::remove);
             }
         }
 
@@ -339,7 +345,8 @@ public class ShopDisplayManager {
         try {
             Entity entity = Bukkit.getEntity(uuid);
             if (entity != null && entity.isValid()) {
-                entity.remove();
+                // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
+                SchedulerUtil.execute(entity, entity::remove);
             }
         } catch (Exception e) {
             plugin.getLogger().warning(() ->

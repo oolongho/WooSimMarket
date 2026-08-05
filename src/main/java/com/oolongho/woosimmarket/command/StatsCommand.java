@@ -51,7 +51,7 @@ public class StatsCommand implements SubCommandHandler {
         }
 
         Shop shop = shops.get(0);
-        new StatsGui(shop, plugin.getPurchaseLogDao(), messages, plugin).open(player);
+        new StatsGui(shop, plugin.getPurchaseLogDao(), messages, plugin, player).open(player);
         return true;
     }
 

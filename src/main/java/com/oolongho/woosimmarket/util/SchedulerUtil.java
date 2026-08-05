@@ -161,6 +161,33 @@ public final class SchedulerUtil {
     }
 
     /**
+     * 同步执行实体操作：Paper 直接调用（假设已在主线程），Folia 路由到实体所属区域线程。
+     *
+     * <p>语义：调用方承诺此操作需要立即执行（如 onEnable init cleanup、onDisable clearAll、
+     * 事件处理 remove）。Paper 路径假设已在主线程，直接 {@code task.run()}；
+     * 而 {@link #runTask(Entity, Runnable)} 在 onDisable 时会抛 {@link IllegalStateException}，
+     * 本方法在 onDisable 时安全（主线程仍在运行）。</p>
+     *
+     * <p>Folia 路径用 {@link Entity#getScheduler()} 路由，实体已销毁时任务被取消（不执行）。</p>
+     *
+     * <p>与 {@link #runTask(Entity, Runnable)} 的区别：
+     * <ul>
+     *   <li>{@code runTask}：Paper 路径用 {@link Bukkit#getScheduler()} 异步下一 tick；onDisable 抛异常</li>
+     *   <li>{@code execute}：Paper 路径直接同步执行；onDisable 安全</li>
+     * </ul></p>
+     *
+     * @param entity 实体上下文
+     * @param task   要执行的任务
+     */
+    public static void execute(Entity entity, Runnable task) {
+        if (isFolia()) {
+            entity.getScheduler().run(plugin, t -> task.run(), null);
+        } else {
+            task.run();
+        }
+    }
+
+    /**
      * 延迟在实体所属区域线程执行任务（Folia），或主线程延迟执行（Paper）。
      *
      * <p>用于实体销毁回调和定时实体操作。Folia 上若实体在延迟期间销毁，

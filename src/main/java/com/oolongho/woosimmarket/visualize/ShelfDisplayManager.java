@@ -4,6 +4,7 @@ import com.oolongho.woosimmarket.WooSimMarket;
 import com.oolongho.woosimmarket.config.ConfigLoader;
 import com.oolongho.woosimmarket.model.Shelf;
 import com.oolongho.woosimmarket.shop.ShopManager;
+import com.oolongho.woosimmarket.util.SchedulerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -73,10 +74,11 @@ public class ShelfDisplayManager {
      */
     public void init() {
         // 清理上次崩溃残留的展示实体（遍历所有已加载世界）
+        // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : world.getEntities()) {
                 if (entity.getScoreboardTags().contains(SCOREBOARD_TAG)) {
-                    entity.remove();
+                    SchedulerUtil.execute(entity, entity::remove);
                 }
             }
         }
@@ -187,9 +189,10 @@ public class ShelfDisplayManager {
      */
     public void onChunkLoad(Chunk chunk) {
         // 清理 chunk 内所有展示实体（崩溃残留 + 持久化实体，统一重建）
+        // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
         for (Entity entity : chunk.getEntities()) {
             if (entity.getScoreboardTags().contains(SCOREBOARD_TAG)) {
-                entity.remove();
+                SchedulerUtil.execute(entity, entity::remove);
             }
         }
 
@@ -257,7 +260,8 @@ public class ShelfDisplayManager {
         try {
             Entity entity = Bukkit.getEntity(uuid);
             if (entity != null && entity.isValid()) {
-                entity.remove();
+                // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
+                SchedulerUtil.execute(entity, entity::remove);
             }
         } catch (Exception e) {
             plugin.getLogger().warning(() ->

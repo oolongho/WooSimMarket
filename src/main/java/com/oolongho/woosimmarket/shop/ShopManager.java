@@ -354,7 +354,7 @@ public class ShopManager {
      * @return 该玩家的货架启用上限
      */
     public int getShelfLimitForPlayer(Player player) {
-        int limit = plugin.getConfigLoader().getShelfMaxEnabledPerPlayer();
+        int limit = plugin.getConfigLoader().getShopMaxEnabledShelvesPerPlayer();
         for (PermissionAttachmentInfo info : player.getEffectivePermissions()) {
             String perm = info.getPermission();
             if (perm.startsWith("woosimmarket.shelf.num.")) {

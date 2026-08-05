@@ -111,7 +111,7 @@ public class ShopGuiListener implements Listener {
      */
     private void handleInfoClick(ShopGui gui, Player player) {
         Shop shop = gui.getShop();
-        SchedulerUtil.runTask(() -> {
+        SchedulerUtil.runTask(player, () -> {
             player.closeInventory();
             plugin.getShopNamingManager().startNaming(player, shop);
         });
@@ -155,7 +155,7 @@ public class ShopGuiListener implements Listener {
      * 此处直接在主线程构造并打开即可，无需额外异步包装。</p>
      */
     private void handleStatsClick(ShopGui gui, Player player) {
-        new StatsGui(gui.getShop(), plugin.getPurchaseLogDao(), messages, plugin).open(player);
+        new StatsGui(gui.getShop(), plugin.getPurchaseLogDao(), messages, plugin, player).open(player);
     }
 
     /**

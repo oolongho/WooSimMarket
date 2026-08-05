@@ -36,8 +36,9 @@ import java.util.Map;
  * </ul></p>
  *
  * <p>线程模型：构造时先同步填充边框与按钮（玩家立即看到框架），再通过
- * {@link SchedulerUtil#runTaskAsynchronously} 查询 purchase_log，{@link SchedulerUtil#runTask} 回主线程渲染聚合结果。
- * {@link #refresh()} 复用同一异步→主线程链路，重置内容槽后重新填充。</p>
+ * {@link SchedulerUtil#runTaskAsynchronously} 查询 purchase_log，
+ * {@link SchedulerUtil#runTask(Player, Runnable)} 路由到玩家所属区域线程（Folia）或主线程（Paper）渲染聚合结果。
+ * {@link #refresh()} 复用同一异步→玩家区域线程链路，重置内容槽后重新填充。</p>
  *
  * <p>通过 {@link InventoryHolder} 标识 GUI，{@link StatsGuiListener} 据此判断事件归属。</p>
  *
@@ -73,12 +74,15 @@ public class StatsGui implements InventoryHolder {
     private final Messages messages;
     private final WooSimMarket plugin;
     private final Inventory inventory;
+    /** 玩家上下文：异步查询完成后用 {@link SchedulerUtil#runTask(Player, Runnable)} 回区域线程渲染，保证 Folia 跨区域安全。 */
+    private final Player player;
 
-    public StatsGui(Shop shop, PurchaseLogDao dao, Messages messages, WooSimMarket plugin) {
+    public StatsGui(Shop shop, PurchaseLogDao dao, Messages messages, WooSimMarket plugin, Player player) {
         this.shop = shop;
         this.dao = dao;
         this.messages = messages;
         this.plugin = plugin;
+        this.player = player;
         this.inventory = Bukkit.createInventory(this, SIZE, messages.get("gui-stats-title"));
         fillFrame();
         loadAndRender();
@@ -125,7 +129,7 @@ public class StatsGui implements InventoryHolder {
                     - plugin.getConfigLoader().getStatsRetentionDays() * 86400000L;
             List<PurchaseLogRecord> records = dao.findRecentByShopSince(
                     shop.id(), sinceMillis, plugin.getConfigLoader().getStatsQueryLimit());
-            SchedulerUtil.runTask(() -> renderContents(records));
+            SchedulerUtil.runTask(player, () -> renderContents(records));
         });
     }
 

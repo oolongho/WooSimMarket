@@ -73,7 +73,9 @@ shop:
   # 收银机绑定货架的半径，货架必须在此半径内才可绑定
   bind-radius: 16
   # 每个玩家可拥有的商店上限
-  limit: 1
+  max-shops-per-player: 1
+  # 玩家可同时启用的货架数量上限（权限 woosimmarket.shelf.num.N ，取最大 N）
+  max-enabled-shelves-per-player: 8
   # 两个收银机之间的最小距离，防止商店互相覆盖
   min-distance: 8
   # 收银台方块

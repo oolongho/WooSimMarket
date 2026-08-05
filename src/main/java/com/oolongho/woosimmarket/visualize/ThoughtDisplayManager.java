@@ -120,19 +120,22 @@ public class ThoughtDisplayManager {
         despawn(npc);
 
         Location displayLoc = loc.clone().add(0, configLoader.getThoughtDisplayYOffset(), 0);
-        TextDisplay display = world.spawn(displayLoc, TextDisplay.class, entity -> {
-            entity.setBillboard(configLoader.getThoughtDisplayBillboard());
-            entity.setBackgroundColor(configLoader.getThoughtDisplayBackgroundColor());
-            entity.setDefaultBackground(false);
-            entity.setShadowed(configLoader.isThoughtDisplayShadow());
-            entity.setSeeThrough(configLoader.isThoughtDisplaySeeThrough());
-            entity.setPersistent(false);
-            entity.addScoreboardTag(SCOREBOARD_TAG);
-            entity.getPersistentDataContainer().set(
-                    thoughtNpcUuidKey, PersistentDataType.STRING, npc.uuid().toString());
-            entity.text(buildText(npc, phase));
+        // Folia 上 world.spawn 必须在 spawn 位置所属区域线程执行，用 runTaskAt 路由
+        SchedulerUtil.runTaskAt(displayLoc, () -> {
+            TextDisplay display = world.spawn(displayLoc, TextDisplay.class, entity -> {
+                entity.setBillboard(configLoader.getThoughtDisplayBillboard());
+                entity.setBackgroundColor(configLoader.getThoughtDisplayBackgroundColor());
+                entity.setDefaultBackground(false);
+                entity.setShadowed(configLoader.isThoughtDisplayShadow());
+                entity.setSeeThrough(configLoader.isThoughtDisplaySeeThrough());
+                entity.setPersistent(false);
+                entity.addScoreboardTag(SCOREBOARD_TAG);
+                entity.getPersistentDataContainer().set(
+                        thoughtNpcUuidKey, PersistentDataType.STRING, npc.uuid().toString());
+                entity.text(buildText(npc, phase));
+            });
+            handles.put(npc.uuid(), new ThoughtHandle(display));
         });
-        handles.put(npc.uuid(), new ThoughtHandle(display));
     }
 
     /**
@@ -156,7 +159,8 @@ public class ThoughtDisplayManager {
             handles.remove(npc.uuid());
             return;
         }
-        handle.entity.text(buildText(npc, phase));
+        // Folia 上 entity.text 必须在实体所属区域线程执行，用 execute 路由
+        SchedulerUtil.execute(handle.entity, () -> handle.entity.text(buildText(npc, phase)));
     }
 
     /**
@@ -181,7 +185,8 @@ public class ThoughtDisplayManager {
             handles.remove(npc.uuid());
             return;
         }
-        handle.entity.text(buildText(npc, phase));
+        // Folia 上 entity.text 必须在实体所属区域线程执行，用 execute 路由
+        SchedulerUtil.execute(handle.entity, () -> handle.entity.text(buildText(npc, phase)));
         if (handle.flashTask != null) {
             handle.flashTask.cancel();
         }
@@ -213,7 +218,8 @@ public class ThoughtDisplayManager {
             handle.flashTask.cancel();
         }
         if (handle.entity.isValid()) {
-            handle.entity.remove();
+            // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
+            SchedulerUtil.execute(handle.entity, handle.entity::remove);
         }
     }
 
@@ -229,7 +235,8 @@ public class ThoughtDisplayManager {
                 handle.flashTask.cancel();
             }
             if (handle.entity.isValid()) {
-                handle.entity.remove();
+                // Folia 上 entity.remove 必须在实体所属区域线程执行，用 execute 路由
+                SchedulerUtil.execute(handle.entity, handle.entity::remove);
             }
         }
         handles.clear();

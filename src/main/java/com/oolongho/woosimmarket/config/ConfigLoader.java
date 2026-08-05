@@ -35,13 +35,11 @@ public class ConfigLoader {
     private boolean debugGeneral;
     private String language;
 
-    // shop
+    // shop（含收银机 + 货架配置，从 market.yml 读取）
     private int shopBindRadius;
-    private int shopLimit;
+    private int shopMaxShopsPerPlayer;
+    private int shopMaxEnabledShelvesPerPlayer;
     private double shopMinDistance;
-
-    // shelf
-    private int shelfMaxEnabledPerPlayer;
 
     // npc
     private int npcSpawnIntervalMin;
@@ -163,13 +161,11 @@ public class ConfigLoader {
         debugGeneral = config.getBoolean("settings.debug.general", false);
         language = config.getString("settings.language", "zh-CN");
 
-        // shop（从 market.yml 读取）
+        // shop（从 market.yml 读取；含收银机 + 货架配置，统一在 shop 节）
         shopBindRadius = Math.max(1, marketConfig.getInt("shop.bind-radius", 16));
-        shopLimit = Math.max(1, marketConfig.getInt("shop.limit", 1));
+        shopMaxShopsPerPlayer = Math.max(1, marketConfig.getInt("shop.max-shops-per-player", 1));
+        shopMaxEnabledShelvesPerPlayer = Math.max(1, marketConfig.getInt("shop.max-enabled-shelves-per-player", 8));
         shopMinDistance = Math.max(0.0, marketConfig.getDouble("shop.min-distance", 8.0));
-
-        // shelf
-        shelfMaxEnabledPerPlayer = config.getInt("shelf.max-enabled-per-player", 8);
 
         // npc（从 npc.yml 读取）
         npcSpawnIntervalMin = Math.max(1, npcConfig.getInt("npc.spawn-interval-min", 30));
@@ -330,17 +326,18 @@ public class ConfigLoader {
         return shopBindRadius;
     }
 
-    public int getShopLimit() {
-        return shopLimit;
+    /** 每个玩家可拥有的商店上限（market.yml: shop.max-shops-per-player）。 */
+    public int getShopMaxShopsPerPlayer() {
+        return shopMaxShopsPerPlayer;
+    }
+
+    /** 每个玩家可同时启用的货架数量上限（market.yml: shop.max-enabled-shelves-per-player，可被权限 woosimmarket.shelf.num.N 覆盖）。 */
+    public int getShopMaxEnabledShelvesPerPlayer() {
+        return shopMaxEnabledShelvesPerPlayer;
     }
 
     public double getShopMinDistance() {
         return shopMinDistance;
-    }
-
-    /** 每个玩家可同时启用的货架数量上限（默认 8，可被权限 woosimmarket.shelf.num.N 覆盖）。 */
-    public int getShelfMaxEnabledPerPlayer() {
-        return shelfMaxEnabledPerPlayer;
     }
 
     /**

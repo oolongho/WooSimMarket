@@ -45,6 +45,9 @@ public class DriftCommand implements SubCommandHandler {
 
     @Override
     public List<String> tabComplete(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("woosimmarket.admin")) {
+            return List.of();
+        }
         if (args.length == 1 && "recompute".startsWith(args[0].toLowerCase())) {
             return List.of("recompute");
         }

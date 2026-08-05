@@ -32,6 +32,10 @@ public class RangeCommand implements SubCommandHandler {
 
     @Override
     public boolean execute(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("woosimmarket.use")) {
+            messages.send(sender, "no-permission");
+            return true;
+        }
         if (!(sender instanceof org.bukkit.entity.Player player)) {
             messages.send(sender, "player-only");
             return true;
